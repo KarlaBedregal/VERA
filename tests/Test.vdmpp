@@ -1,0 +1,85 @@
+-- ============================================================
+-- Test.vdmpp
+-- Escenarios de prueba T1–T9
+-- Marco metodológico: NIST TN 1822 (Ronchi et al., 2013)
+-- Responsable: C3   Revisor: C2
+-- VERA · UNSA 2026-B
+-- ============================================================
+class Test
+
+operations
+
+  -- ─── T1: Evacuación normal ────────────────────────────────
+  -- Componente NIST: Uso de salidas
+  -- Esperado: todas las aulas con ruta válida; se usan ambas salidas
+  public T1_evacuacionNormal: () ==> ()
+  T1_evacuacionNormal() ==
+    -- TODO (E3-24)
+    skip;
+
+  -- ─── T2: Bloqueo de escalera durante evacuación ───────────
+  -- Componente NIST: Disponibilidad de rutas
+  -- Esperado: aulas afectadas reasignadas; ninguna ruta usa la escalera
+  public T2_bloqueoEscalera: () ==> ()
+  T2_bloqueoEscalera() ==
+    -- TODO (E3-24)
+    skip;
+
+  -- ─── T3: Dos bloqueos simultáneos ─────────────────────────
+  -- Componente NIST: Disponibilidad de rutas
+  -- Esperado: reasignación correcta o SIN_RUTA; nunca ruta inválida
+  public T3_dosBloqueos: () ==> ()
+  T3_dosBloqueos() ==
+    -- TODO (E3-24)
+    skip;
+
+  -- ─── T4: Ocupación = capacidad exacta de un tramo ─────────
+  -- Componente NIST: Restricciones de flujo
+  -- Esperado: se asigna; carga = capacidad del tramo
+  public T4_capacidadExacta: () ==> ()
+  T4_capacidadExacta() ==
+    -- TODO (E3-24)
+    skip;
+
+  -- ─── T5: Ocupación > capacidad de la ruta más corta ───────
+  -- Componente NIST: Restricciones de flujo
+  -- Esperado: el sistema asigna una ruta alternativa más larga
+  public T5_rutaAlternativa: () ==> ()
+  T5_rutaAlternativa() ==
+    -- TODO (E3-24)
+    skip;
+
+  -- ─── T6: Todas las salidas bloqueadas ─────────────────────
+  -- Componente NIST: Disponibilidad de rutas
+  -- Esperado: todas las aulas quedan SIN_RUTA; ninguna asignación
+  public T6_todasSalidasBloqueadas: () ==> ()
+  T6_todasSalidasBloqueadas() ==
+    -- TODO (E3-24)
+    skip;
+
+  -- ─── T7: Bloqueo de tramo sin uso ─────────────────────────
+  -- Componente NIST: Estabilidad
+  -- Esperado: ninguna ruta asignada cambia
+  public T7_bloqueoSinImpacto: () ==> ()
+  T7_bloqueoSinImpacto() ==
+    -- TODO (E3-24)
+    skip;
+
+  -- ─── T8: Escalabilidad (1, 3 y 6 pisos) ──────────────────
+  -- Componente NIST: Escalabilidad
+  -- Esperado: invariantes se mantienen; se reporta n.º nodos y tramos
+  public T8_escalabilidad: () ==> ()
+  T8_escalabilidad() ==
+    -- TODO (E3-24): usar GeneradorPabellon.generar(1), generar(3), generar(6)
+    skip;
+
+  -- ─── T9: finalizarEvacuacion con gente adentro ────────────
+  -- Componente NIST: Seguridad
+  -- Esperado: el intérprete RECHAZA por precondición (adjuntar captura)
+  public T9_finalizarConGente: () ==> ()
+  T9_finalizarConGente() ==
+    -- TODO (E3-24): construir escenario con aula PENDIENTE y
+    --               llamar finalizarEvacuacion — debe fallar la precondición
+    skip;
+
+end Test

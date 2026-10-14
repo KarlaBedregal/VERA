@@ -1,0 +1,4 @@
+elemento_id,tipo,piso,descripcion,ancho_m,largo_m,capacidad_A130,notas
+# TODO (E3-07): completar con mediciones del jueves 15 oct
+# tipo: AULA | PASILLO | ESCALERA | PUERTA | SALIDA
+# capacidad_A130: floor(ancho/0.005) para pasillo/puerta, floor(ancho/0.008) para escalera

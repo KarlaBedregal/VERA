@@ -1,0 +1,46 @@
+-- ============================================================
+-- Tipos.vdmpp
+-- Tipos base, records y función auxiliar capacidad (Norma A.130)
+-- Responsable: C2   Revisor: C5
+-- VERA · UNSA 2026-B
+-- ============================================================
+class Tipos
+
+types
+
+  public NodoId   = nat1;
+  public TramoId  = nat1;
+
+  public TipoNodo    = <AULA> | <PASO> | <DESCANSO> | <SALIDA>;
+  public TipoTramo   = <PASILLO> | <ESCALERA> | <PUERTA>;
+  public EstadoTramo = <HABILITADO> | <BLOQUEADO>;
+  public EstadoAula  = <PENDIENTE> | <EN_TRANSITO> | <EVACUADA> | <SIN_RUTA>;
+  public EstadoSist  = <INACTIVO> | <ALERTA> | <EVACUANDO> | <FINALIZADO>;
+
+  public Nodo :: id   : NodoId
+                 tipo : TipoNodo
+                 piso : nat;
+
+  public Tramo :: id      : TramoId
+                  origen  : NodoId
+                  destino : NodoId
+                  tipo    : TipoTramo
+                  ancho   : real
+                  estado  : EstadoTramo
+  inv t == t.origen <> t.destino and t.ancho > 0;
+
+  public Ruta = seq1 of NodoId;
+
+functions
+
+  -- Capacidad máxima según Norma A.130 RNE
+  -- Pasillo/puerta: floor(ancho / 0.005)
+  -- Escalera      : floor(ancho / 0.008)
+  public capacidad: Tramo -> nat1
+  capacidad(t) ==
+    if t.tipo = <ESCALERA>
+    then floor(t.ancho / 0.008)
+    else floor(t.ancho / 0.005)
+  pre t.ancho > 0;
+
+end Tipos

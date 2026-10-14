@@ -1,0 +1,26 @@
+-- ============================================================
+-- GeneradorPabellon.vdmpp
+-- Genera un pabellón de N pisos para pruebas de escalabilidad (T8)
+-- Topología estándar: 2 aulas por piso, 1 pasillo central,
+--                     1 escalera, 2 salidas en planta baja.
+-- Responsable: C5   Revisor: C4
+-- VERA · UNSA 2026-B
+-- ============================================================
+class GeneradorPabellon
+
+values
+  ANCHO_PASILLO  : real = 2.4;
+  ANCHO_ESCALERA : real = 1.2;
+  ANCHO_PUERTA   : real = 1.0;
+
+operations
+
+  -- Genera y devuelve un Pabellon de nPisos pisos.
+  -- TODO (E3-20)
+  public generar: nat1 ==> Pabellon
+  generar(nPisos) ==
+    -- TODO: construir el grafo programáticamente con los anchos estándar
+    return new Pabellon()
+  pre nPisos >= 1;
+
+end GeneradorPabellon

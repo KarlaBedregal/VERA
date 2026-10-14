@@ -1,0 +1,67 @@
+-- ============================================================
+-- Planificador.vdmpp
+-- buscarRuta (BFS iterativo con capacidad residual)
+-- asignarTodas (asignación estilo CCRP)
+-- Responsable: C5   Revisor: C2
+-- VERA · UNSA 2026-B
+-- ============================================================
+class Planificador
+
+instance variables
+
+  protected pabellon : Pabellon;
+  protected carga    : map Tipos`TramoId to nat := {|->};
+
+operations
+
+  public Planificador: Pabellon ==> Planificador
+  Planificador(p) ==
+  (
+    pabellon := p;
+    carga    := {tid |-> 0 | tid in set dom p.getTramos()}
+  );
+
+  -- BFS iterativo desde `origen` hasta cualquier salida habilitada.
+  -- Considera solo tramos HABILITADOS con capacidad residual >= personas.
+  -- Devuelve nil si no existe ruta factible.
+  -- TODO (E3-13 sin capacidad, E3-16 con capacidad)
+  public buscarRuta: Tipos`NodoId * nat ==> [Tipos`Ruta]
+  buscarRuta(origen, personas) ==
+    -- TODO: implementar BFS iterativo usando while y una cola explícita
+    return nil
+  pre origen in set dom pabellon.getNodos()
+  post RESULT <> nil =>
+         esRutaValida(RESULT, pabellon.getTramos(),
+                      pabellon.getSalidas(), carga, personas);
+
+  -- Asigna rutas a todas las aulas de `ocupacion` con ocupación > 0.
+  -- Orden: piso más alto primero; a igual piso, mayor ocupación primero.
+  -- Reserva la capacidad en `carga` al asignar cada ruta.
+  -- TODO (E3-17)
+  public asignarTodas: map Tipos`NodoId to nat ==>
+                       map Tipos`NodoId to [Tipos`Ruta]
+  asignarTodas(ocupacion) ==
+    -- TODO: implementar orden de prioridad + llamada a buscarRuta + reserva
+    return {a |-> nil | a in set dom ocupacion}
+  pre forall a in set dom ocupacion &
+        a in set pabellon.getAulas();
+
+  public getCarga: () ==> map Tipos`TramoId to nat
+  getCarga() == return carga;
+
+functions
+
+  -- Verifica que una ruta sea válida:
+  -- (1) nodos consecutivos están conectados por un tramo HABILITADO
+  -- (2) termina en una salida
+  -- (3) capacidad residual >= personas en cada tramo de la ruta
+  -- TODO (E3-12)
+  public esRutaValida: Tipos`Ruta * map Tipos`TramoId to Tipos`Tramo *
+                       set of Tipos`NodoId * map Tipos`TramoId to nat *
+                       nat -> bool
+  esRutaValida(ruta, tramos, salidas, carga, personas) ==
+    -- TODO
+    false
+  pre len ruta >= 2;
+
+end Planificador

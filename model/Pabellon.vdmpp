@@ -1,0 +1,58 @@
+-- ============================================================
+-- Pabellon.vdmpp
+-- Grafo del edificio: nodos, tramos, salidas, aulas
+-- Invariantes estructurales del pabellón
+-- Responsable: C2   Revisor: C5
+-- VERA · UNSA 2026-B
+-- ============================================================
+class Pabellon
+
+instance variables
+
+  protected nodos  : map Tipos`NodoId  to Tipos`Nodo  := {|->};
+  protected tramos : map Tipos`TramoId to Tipos`Tramo := {|->};
+
+  -- I-P1: los extremos de cada tramo deben existir como nodos
+  inv forall t in set rng tramos &
+        t.origen  in set dom nodos and
+        t.destino in set dom nodos;
+
+  -- I-P2: si hay nodos, debe existir al menos una salida
+  inv nodos <> {|->} =>
+        exists n in set rng nodos & n.tipo = <SALIDA>;
+
+operations
+
+  public agregarNodo: Tipos`Nodo ==> ()
+  agregarNodo(n) ==
+    nodos := nodos ++ {n.id |-> n}
+  pre n.id not in set dom nodos;
+
+  public agregarTramo: Tipos`Tramo ==> ()
+  agregarTramo(t) ==
+    tramos := tramos ++ {t.id |-> t}
+  pre t.id not in set dom tramos and
+      t.origen  in set dom nodos and
+      t.destino in set dom nodos;
+
+  public bloquearTramo: Tipos`TramoId ==> ()
+  bloquearTramo(tid) ==
+    tramos := tramos ++ {tid |-> mu(tramos(tid), estado |-> <BLOQUEADO>)}
+  pre tid in set dom tramos and
+      tramos(tid).estado = <HABILITADO>;
+
+  public getNodos  : () ==> map Tipos`NodoId  to Tipos`Nodo
+  getNodos()  == return nodos;
+
+  public getTramos : () ==> map Tipos`TramoId to Tipos`Tramo
+  getTramos() == return tramos;
+
+  public getSalidas: () ==> set of Tipos`NodoId
+  getSalidas() ==
+    return {n.id | n in set rng nodos & n.tipo = <SALIDA>};
+
+  public getAulas  : () ==> set of Tipos`NodoId
+  getAulas() ==
+    return {n.id | n in set rng nodos & n.tipo = <AULA>};
+
+end Pabellon

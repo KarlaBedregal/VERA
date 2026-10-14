@@ -1,0 +1,25 @@
+-- ============================================================
+-- Traces.vdmpp
+-- Pruebas combinatorias: asignarRutas + bloquear cualquier tramo
+-- Verifican que ninguna combinación de acciones rompe los invariantes.
+-- Responsable: C5   Revisor: C3
+-- VERA · UNSA 2026-B
+-- ============================================================
+class Traces
+
+-- TODO (E3-25):
+-- Definir traces combinatorias usando la sintaxis VDM++ traces.
+--
+-- Ejemplo de estructura:
+--
+-- traces
+--   TrazoBloqueoArbitrario:
+--     let tid in set dom pabellon.getTramos() in
+--       sistema.activarAlerta();
+--       sistema.asignarRutas();
+--       sistema.bloquearTramo(tid)
+--
+-- El intérprete generará y verificará todas las combinaciones posibles
+-- de valores de tid, comprobando que los invariantes se mantienen.
+
+end Traces

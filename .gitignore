@@ -1,0 +1,26 @@
+# Overture / VDM VSCode
+.generated/
+*.vdmj
+*.class
+.vscode/
+!.vscode/settings.json
+
+# UPPAAL
+*.xta
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# LaTeX (si se usa para el artículo)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+# Office
+~$*.docx
+~$*.xlsx

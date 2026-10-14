@@ -1,0 +1,41 @@
+-- ============================================================
+-- PabellonUNSA.vdmpp
+-- Instancia real del pabellón UNSA medido en campo (E3-07)
+-- Datos fuente: data/pabellon-medidas.csv
+-- Responsable: C4   Revisor: C2
+-- VERA · UNSA 2026-B
+-- ============================================================
+class PabellonUNSA is subclass of Pabellon
+
+operations
+
+  -- Carga el grafo completo del pabellón con datos reales.
+  -- TODO (E3-19): completar tras la medición del jueves 15 oct.
+  --
+  -- Convención de IDs:
+  --   Nodos:  1xx = piso 1,  2xx = piso 2,  3xx = piso 3
+  --           x01–x10 = aulas,  x50 = descanso escalera,  x99 = salida
+  --   Tramos: 1xxx = pasillo,  2xxx = escalera,  3xxx = puerta
+  public inicializar: () ==> ()
+  inicializar() ==
+  (
+    -- PISO 1 ────────────────────────────────────────────
+    -- agregarNodo(mk_Tipos`Nodo(101, <AULA>,   1));
+    -- agregarNodo(mk_Tipos`Nodo(150, <PASO>,   1));
+    -- agregarNodo(mk_Tipos`Nodo(199, <SALIDA>, 1));
+    -- agregarTramo(mk_Tipos`Tramo(1001, 101, 150, <PASILLO>, 2.4, <HABILITADO>));
+    -- agregarTramo(mk_Tipos`Tramo(3001, 150, 199, <PUERTA>,  1.2, <HABILITADO>));
+
+    -- PISO 2 ────────────────────────────────────────────
+    -- TODO
+
+    -- PISO 3 ────────────────────────────────────────────
+    -- TODO
+
+    -- ESCALERA (conecta pisos) ───────────────────────────
+    -- TODO
+
+    skip
+  );
+
+end PabellonUNSA
