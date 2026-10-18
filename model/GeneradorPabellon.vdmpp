@@ -1,26 +1,165 @@
 -- ============================================================
 -- GeneradorPabellon.vdmpp
--- Genera un pabellón de N pisos para pruebas de escalabilidad (T8)
--- Topología estándar: 2 aulas por piso, 1 pasillo central,
---                     1 escalera, 2 salidas en planta baja.
+-- Genera pabellones de N pisos para pruebas de escalabilidad.
+--
+-- TOPOLOGÍA GENERADA (misma por cada piso):
+--   · 2 aulas (A y B) conectadas al pasillo central
+--   · 1 pasillo central (PASO)
+--   · 1 descanso de escalera (DESCANSO) en pisos > 0
+--   · 1 escalera central que desciende de piso en piso
+--   · 2 salidas exteriores en planta baja
+--
+-- ESQUEMA DE IDs:
+--   Nodos :  piso p → aulaA = p*10+1, aulaB = p*10+2,
+--                     pasillo = p*10+5
+--            descanso (p>0) = p*10+6
+--            salida1 = nPisos*10+91, salida2 = nPisos*10+92
+--   Tramos:  puertas  = 10000 + p*10 + {1,2}
+--            pasillo→descanso = 20000 + p*10
+--            escaleras = 30000 + p*10
+--            salidas = 40000 + {1,2}
+--
+-- DIMENSIONES (Norma A.130 del RNE):
+--   Puerta de aula : 1.00 m → capacidad 200 personas
+--   Pasillo central: 2.40 m → capacidad 480 personas
+--   Escalera       : 1.20 m → capacidad 150 personas
+--   Puerta salida  : 1.00 m → capacidad 200 personas
+--
 -- Responsable: C5   Revisor: C4
 -- VERA · UNSA 2026-B
 -- ============================================================
 class GeneradorPabellon
 
+-- ============================================================
+-- CONSTANTES DIMENSIONALES (Norma A.130)
+-- ============================================================
 values
-  ANCHO_PASILLO  : real = 2.4;
-  ANCHO_ESCALERA : real = 1.2;
-  ANCHO_PUERTA   : real = 1.0;
+  ANCHO_PUERTA   : real = 1.00;
+  ANCHO_PASILLO  : real = 2.40;
+  ANCHO_ESCALERA : real = 1.20;
 
+-- ============================================================
+-- OPERACIÓN PRINCIPAL
+-- ============================================================
 operations
 
-  -- Genera y devuelve un Pabellon de nPisos pisos.
-  -- TODO (E3-20)
+  -- ----------------------------------------------------------
+  -- generar: construye y devuelve un Pabellon de nPisos pisos.
+  --
+  -- El piso 0 es planta baja (con salidas).
+  -- El piso nPisos-1 es la planta más alta.
+  -- La evacuación fluye de arriba hacia abajo por la escalera
+  -- central y sale por cualquiera de las dos salidas.
+  --
+  -- Pre : nPisos >= 1
+  -- Post: el pabellón tiene
+  --         nPisos*3 + 2 nodos (2 aulas + pasillo + descanso*
+  --                              por piso, + 2 salidas)
+  --         * el descanso solo existe en pisos > 0
+  --       exactamente 2 salidas en piso 0
+  -- ----------------------------------------------------------
   public generar: nat1 ==> Pabellon
   generar(nPisos) ==
-    -- TODO: construir el grafo programáticamente con los anchos estándar
-    return new Pabellon()
+  (
+    dcl p : Pabellon := new Pabellon();
+
+    -- ──────────────────────────────────────────────────────
+    -- FASE 1: agregar todos los nodos
+    -- Primero las SALIDAS para satisfacer el invariante I-P2
+    -- desde la primera llamada a agregarNodo.
+    -- ──────────────────────────────────────────────────────
+    p.agregarNodo(mk_Tipos`Nodo(nPisos * 10 + 91, <SALIDA>, 0));
+    p.agregarNodo(mk_Tipos`Nodo(nPisos * 10 + 92, <SALIDA>, 0));
+
+    -- Luego el resto de nodos por piso
+    for piso = 0 to nPisos - 1 do
+    (
+      -- Dos aulas por piso
+      p.agregarNodo(mk_Tipos`Nodo(piso * 10 + 1, <AULA>, piso));
+      p.agregarNodo(mk_Tipos`Nodo(piso * 10 + 2, <AULA>, piso));
+      -- Pasillo central
+      p.agregarNodo(mk_Tipos`Nodo(piso * 10 + 5, <PASO>, piso));
+      -- Descanso de escalera solo en pisos superiores
+      if piso > 0
+      then p.agregarNodo(mk_Tipos`Nodo(piso * 10 + 6, <DESCANSO>, piso))
+    );
+
+    -- ──────────────────────────────────────────────────────
+    -- FASE 2: agregar todos los tramos
+    -- ──────────────────────────────────────────────────────
+    for piso = 0 to nPisos - 1 do
+    (
+      -- Puertas aula → pasillo (ambas aulas)
+      p.agregarTramo(mk_Tipos`Tramo(
+            10000 + piso * 10 + 1,
+            piso * 10 + 1,
+            piso * 10 + 5,
+            <PUERTA>, ANCHO_PUERTA, <HABILITADO>));
+      p.agregarTramo(mk_Tipos`Tramo(
+            10000 + piso * 10 + 2,
+            piso * 10 + 2,
+            piso * 10 + 5,
+            <PUERTA>, ANCHO_PUERTA, <HABILITADO>));
+
+      if piso > 0
+      then
+      (
+        -- Pasillo → descanso escalera (para bajar)
+        p.agregarTramo(mk_Tipos`Tramo(
+              20000 + piso * 10,
+              piso * 10 + 5,
+              piso * 10 + 6,
+              <PASILLO>, ANCHO_PASILLO, <HABILITADO>));
+
+        -- Escalera: descanso piso actual → destino piso inferior
+        -- Si el piso inferior es > 0: destino = descanso del piso inferior
+        -- Si el piso inferior es 0 : destino = pasillo planta baja
+        if piso > 1
+        then
+          p.agregarTramo(mk_Tipos`Tramo(
+                30000 + piso * 10,
+                piso * 10 + 6,
+                (piso - 1) * 10 + 6,
+                <ESCALERA>, ANCHO_ESCALERA, <HABILITADO>))
+        else
+          p.agregarTramo(mk_Tipos`Tramo(
+                30000 + piso * 10,
+                piso * 10 + 6,
+                5,
+                <ESCALERA>, ANCHO_ESCALERA, <HABILITADO>))
+      )
+    );
+
+    -- Tramos pasillo planta baja → salidas
+    p.agregarTramo(mk_Tipos`Tramo(
+          40001, 5, nPisos * 10 + 91,
+          <PUERTA>, ANCHO_PUERTA, <HABILITADO>));
+    p.agregarTramo(mk_Tipos`Tramo(
+          40002, 5, nPisos * 10 + 92,
+          <PUERTA>, ANCHO_PUERTA, <HABILITADO>));
+
+    return p
+  )
+  pre  nPisos >= 1
+  post -- Hay exactamente 2 salidas
+       RESULT.cantidadSalidas() = 2 and
+       -- No hay tramos bloqueados inicialmente
+       RESULT.cantidadBloqueados() = 0;
+
+  -- ----------------------------------------------------------
+  -- generarConOcupacion: genera el pabellón y devuelve también
+  -- la ocupación inicial (personas por aula).
+  -- Simplifica la creación de escenarios de prueba.
+  -- ----------------------------------------------------------
+  public generarConOcupacion: nat1 * nat ==>
+                              Pabellon * map Tipos`NodoId to nat
+  generarConOcupacion(nPisos, personasPorAula) ==
+  (
+    dcl p   : Pabellon               := generar(nPisos);
+    dcl ocp : map Tipos`NodoId to nat :=
+          {a |-> personasPorAula | a in set p.getAulas()};
+    return mk_(p, ocp)
+  )
   pre nPisos >= 1;
 
 end GeneradorPabellon

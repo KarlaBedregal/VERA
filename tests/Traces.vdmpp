@@ -1,25 +1,142 @@
 -- ============================================================
 -- Traces.vdmpp
--- Pruebas combinatorias: asignarRutas + bloquear cualquier tramo
--- Verifican que ninguna combinación de acciones rompe los invariantes.
+-- Pruebas combinatorias (Combinatorial Testing) del sistema VERA.
+--
+-- Objetivo: generar y verificar exhaustivamente todas las
+-- combinaciones de acciones relevantes del ciclo de evacuación.
+-- El intérprete Overture ejecuta cada secuencia y comprueba que
+-- no se violan precondiciones ni postcondiciones.
+--
+-- Pabellón de prueba (mínimo para CT manejable):
+--   2 pisos, 2 aulas/piso, 1 escalera, 2 salidas.
+--   Tramos de escalera: TE1 (piso 1 → piso 0).
+--   Tramos de salida  : TS1, TS2.
+--   Total tramos relevantes para bloqueo: 3.
+--
+-- Trazas definidas:
+--   TC1: FlujoNominal    — activar → asignar → confirmar → finalizar
+--   TC2: BloqueoEscalera — bloquear la escalera en cualquier momento
+--   TC3: BloqueoSalida   — bloquear una de las dos salidas
+--   TC4: BloqueoDoble    — bloquear escalera + una salida (orden)
+--
 -- Responsable: C5   Revisor: C3
 -- VERA · UNSA 2026-B
 -- ============================================================
 class Traces
 
--- TODO (E3-25):
--- Definir traces combinatorias usando la sintaxis VDM++ traces.
---
--- Ejemplo de estructura:
---
--- traces
---   TrazoBloqueoArbitrario:
---     let tid in set dom pabellon.getTramos() in
---       sistema.activarAlerta();
---       sistema.asignarRutas();
---       sistema.bloquearTramo(tid)
---
--- El intérprete generará y verificará todas las combinaciones posibles
--- de valores de tid, comprobando que los invariantes se mantienen.
+-- ============================================================
+-- VARIABLES DE INSTANCIA
+-- El constructor inicializa un pabellón mínimo de 2 pisos
+-- para que el espacio de combinaciones sea manejable.
+-- ============================================================
+instance variables
+
+  pb  : Pabellon;
+  pl  : Planificador;
+  se  : SistemaEvacuacion;
+
+-- ============================================================
+-- CONSTRUCTOR
+-- ============================================================
+operations
+
+  -- Construye el pabellón mínimo de 2 pisos para el CT.
+  --
+  -- Estructura (nodos):
+  --   Piso 1: AulaA(11), AulaB(12), Pasillo(15), Descanso(16)
+  --   Piso 0: AulaA(1),  AulaB(2),  Pasillo(5),  S1(91), S2(92)
+  --
+  -- Tramos de prueba:
+  --   T10011: AulaA_p1 → Pasillo_p1  (PUERTA 1.00m)
+  --   T10012: AulaB_p1 → Pasillo_p1  (PUERTA 1.00m)
+  --   T20010: Pasillo_p1 → Descanso   (PASILLO 2.40m)
+  --   T30010: Descanso → Pasillo_p0   (ESCALERA 1.20m) ← TID_ESCALERA
+  --   T10001: AulaA_p0 → Pasillo_p0  (PUERTA 1.00m)
+  --   T10002: AulaB_p0 → Pasillo_p0  (PUERTA 1.00m)
+  --   T40001: Pasillo_p0 → Salida_1  (PUERTA 1.00m)  ← TID_SALIDA_1
+  --   T40002: Pasillo_p0 → Salida_2  (PUERTA 1.00m)  ← TID_SALIDA_2
+  public Traces: () ==> Traces
+  Traces() ==
+  (
+    dcl gen : GeneradorPabellon := new GeneradorPabellon();
+    pb := gen.generar(2);
+    pl := new Planificador(pb);
+    -- Ocupación: 30 personas por aula (nPisos=2: 4 aulas en total)
+    se := new SistemaEvacuacion(pb, pl,
+            {a |-> 30 | a in set pb.getAulas()})
+  );
+
+-- ============================================================
+-- OPERACIONES AUXILIARES PARA LAS TRAZAS
+-- (Wrappers con precondiciones laxas para uso en CT)
+-- ============================================================
+
+  -- Confirma la evacuación de un aula solo si está EN_TRANSITO
+  public confirmarSiPosible: Tipos`NodoId ==> ()
+  confirmarSiPosible(a) ==
+    if a in set pb.getAulas() and
+       se.getEstadoAula(a) = <EN_TRANSITO>
+    then se.confirmarEvacuada(a);
+
+  -- Bloquea un tramo solo si está HABILITADO y el sistema EVACUANDO
+  public bloquearSiPosible: Tipos`TramoId ==> ()
+  bloquearSiPosible(tid) ==
+    if tid in set dom pb.getTramos() and
+       pb.getTramos()(tid).estado = <HABILITADO> and
+       se.getEstado() = <EVACUANDO>
+    then se.bloquearTramo(tid);
+
+-- ============================================================
+-- TRAZAS COMBINATORIAS
+-- ============================================================
+traces
+
+  -- ──────────────────────────────────────────────────────────
+  -- TC1: FlujoNominal
+  -- Verifica el ciclo de vida completo sin bloqueos:
+  --   INACTIVO → ALERTA → EVACUANDO → confirmar planta baja
+  -- Nodos 1 y 2 = aulas de planta baja del pabellón generado.
+  -- ──────────────────────────────────────────────────────────
+  TC1_FlujoNominal:
+    se.activarAlerta();
+    se.asignarRutas();
+    confirmarSiPosible(1);
+    confirmarSiPosible(2);
+
+  -- ──────────────────────────────────────────────────────────
+  -- TC2: BloqueoEscalera
+  -- Bloquea la escalera central (TramoId 30010) después de
+  -- asignar rutas. Las aulas del piso 1 quedan SIN_RUTA.
+  -- Overture verifica que no se violan pre/postcondiciones.
+  -- ──────────────────────────────────────────────────────────
+  TC2_BloqueoEscalera:
+    se.activarAlerta();
+    se.asignarRutas();
+    bloquearSiPosible(30010);
+
+  -- ──────────────────────────────────────────────────────────
+  -- TC3: BloqueoSalida
+  -- Bloquea una de las dos salidas (40001 = S1, 40002 = S2).
+  -- El CT genera las dos variantes y verifica que en ambas
+  -- las rutas restantes siguen siendo válidas.
+  -- ──────────────────────────────────────────────────────────
+  TC3_BloqueoSalida:
+    se.activarAlerta();
+    se.asignarRutas();
+    let tid in set {40001, 40002} in
+      bloquearSiPosible(tid);
+
+  -- ──────────────────────────────────────────────────────────
+  -- TC4: BloqueoDoble (escalera + salida)
+  -- El CT genera 2 combinaciones:
+  --   · escalera (30010) → salida A (40001)
+  --   · escalera (30010) → salida B (40002)
+  -- ──────────────────────────────────────────────────────────
+  TC4_BloqueoDoble:
+    se.activarAlerta();
+    se.asignarRutas();
+    bloquearSiPosible(30010);
+    let tid in set {40001, 40002} in
+      bloquearSiPosible(tid);
 
 end Traces

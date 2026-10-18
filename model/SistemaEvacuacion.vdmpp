@@ -1,98 +1,369 @@
 -- ============================================================
 -- SistemaEvacuacion.vdmpp
--- Ciclo de vida de la evacuación e invariantes de seguridad
+-- Ciclo de vida de la evacuación e invariantes de seguridad.
+--
+-- Esta clase orquesta todo el proceso de evacuación sísmica:
+-- desde la recepción de la alerta hasta la confirmación de que
+-- todos los ocupantes han salido del edificio.
+--
+-- Estados del sistema (ciclo de vida):
+--   INACTIVO  → activarAlerta()  → ALERTA
+--   ALERTA    → asignarRutas()   → EVACUANDO
+--   EVACUANDO → bloquearTramo()  → EVACUANDO  (reasignación)
+--   EVACUANDO → confirmarEvacuada() → EVACUANDO (parcial)
+--   EVACUANDO → finalizarEvacuacion() → FINALIZADO
+--
+-- Invariantes de seguridad (I1–I5):
+--   I1: toda ruta asignada (no nil) cumple esRutaValida
+--       → el sistema nunca dirige a nadie a una ruta insegura
+--   I2: ningún tramo supera su capacidad A.130
+--       → se respeta siempre la Norma A.130 del RNE
+--   I3: ninguna ruta asignada pasa por un tramo bloqueado
+--       → implícita en I1 (esRutaValida verifica HABILITADO)
+--   I4: durante EVACUANDO toda aula ocupada tiene ruta o SIN_RUTA
+--       → no hay aula en estado indeterminado
+--   I5: FINALIZADO implica que toda ocupación es 0
+--       → no se puede cerrar la evacuación con gente adentro
+--
 -- Responsable: C2   Revisor: C1
 -- VERA · UNSA 2026-B
 -- ============================================================
 class SistemaEvacuacion
 
+-- ============================================================
+-- VARIABLES DE INSTANCIA
+-- ============================================================
 instance variables
 
-  protected estado     : Tipos`EstadoSist                    := <INACTIVO>;
-  protected asignacion : map Tipos`NodoId to [Tipos`Ruta]    := {|->};
+  -- Estado global del sistema de evacuación
+  protected estado : Tipos`EstadoSist := <INACTIVO>;
+
+  -- Mapa de asignación: aula → ruta asignada (nil = sin ruta)
+  protected asignacion : map Tipos`NodoId to [Tipos`Ruta] := {|->};
+
+  -- Estado de evacuación de cada aula
   protected estadoAula : map Tipos`NodoId to Tipos`EstadoAula := {|->};
-  protected ocupacion  : map Tipos`NodoId to nat             := {|->};
 
+  -- Ocupación actual de cada aula (personas)
+  protected ocupacion : map Tipos`NodoId to nat := {|->};
+
+  -- Grafo del pabellón
   protected pabellon : Pabellon;
-  protected planif   : Planificador;
 
-  -- I1: toda ruta asignada (no nil) es válida
-  -- inv forall a in set dom asignacion &
-  --       asignacion(a) <> nil =>
-  --         planif.esRutaValida(asignacion(a), pabellon.getTramos(),
-  --                             pabellon.getSalidas(),
-  --                             planif.getCarga(), ocupacion(a));
+  -- Planificador de rutas
+  protected planif : Planificador;
 
-  -- I2: ningún tramo supera su capacidad A.130
-  -- inv forall tid in set dom planif.getCarga() &
-  --       planif.getCarga()(tid) <=
-  --         Tipos`capacidad(pabellon.getTramos()(tid));
-
-  -- I4: durante EVACUANDO toda aula con ocupación > 0 tiene ruta o SIN_RUTA
-  -- inv estado = <EVACUANDO> =>
+  -- ──────────────────────────────────────────────────────────
+  -- INVARIANTES DE SEGURIDAD (I1–I5)
+  -- Documentadas aquí; verificadas mediante postcondiciones,
+  -- POG y casos de prueba T1–T9.
+  --
+  -- I1: forall a in set dom asignacion &
+  --       asignacion(a) <> nil and a in set dom ocupacion =>
+  --         planif.esRutaValida(asignacion(a),
+  --                            pabellon.getTramos(),
+  --                            pabellon.getSalidas(),
+  --                            planif.getCarga(), ocupacion(a))
+  --
+  -- I2: forall tid in set dom planif.getCarga() &
+  --       tid in set dom pabellon.getTramos() =>
+  --         planif.getCarga()(tid) <=
+  --           Tipos`capacidad(pabellon.getTramos()(tid))
+  --
+  -- I3: estado = <EVACUANDO> =>
+  --       forall a in set dom asignacion &
+  --         asignacion(a) <> nil =>
+  --           not exists tid in set dom pabellon.getTramos() &
+  --             pabellon.getTramos()(tid).estado = <BLOQUEADO> and
+  --             planif.rutaUsaTramo(asignacion(a), tid,
+  --                                pabellon.getTramos())
+  --     (incluida en I1: esRutaValida exige tramos HABILITADOS)
+  --
+  -- I4: estado = <EVACUANDO> =>
   --       forall a in set dom ocupacion &
   --         ocupacion(a) > 0 =>
-  --           a in set dom asignacion or estadoAula(a) = <SIN_RUTA>;
+  --           (a in set dom asignacion and asignacion(a) <> nil) or
+  --           (a in set dom estadoAula and
+  --            estadoAula(a) = <SIN_RUTA>)
+  --
+  -- I5: estado = <FINALIZADO> =>
+  --       forall a in set dom ocupacion & ocupacion(a) = 0
+  -- ──────────────────────────────────────────────────────────
 
-  -- I5: FINALIZADO => toda ocupación es 0
-  -- inv estado = <FINALIZADO> =>
-  --       forall a in set dom ocupacion & ocupacion(a) = 0;
-
+-- ============================================================
+-- CONSTRUCTOR
+-- ============================================================
 operations
 
+  -- Inicializa el sistema con el pabellón, el planificador y
+  -- la ocupación inicial de cada aula.
+  -- Pre : todas las aulas en `ocup` existen en el pabellón.
+  -- Post: todas las aulas inician en estado PENDIENTE.
   public SistemaEvacuacion: Pabellon * Planificador *
                              map Tipos`NodoId to nat ==> SistemaEvacuacion
   SistemaEvacuacion(p, pl, ocup) ==
   (
-    pabellon  := p;
-    planif    := pl;
-    ocupacion := ocup;
+    pabellon   := p;
+    planif     := pl;
+    ocupacion  := ocup;
     estadoAula := {a |-> <PENDIENTE> | a in set dom ocup}
   )
-  pre forall a in set dom ocup & a in set p.getAulas();
+  pre  forall a in set dom ocup & a in set p.getAulas()
+  post estado = <INACTIVO> and
+       dom estadoAula = dom ocup and
+       forall a in set dom estadoAula & estadoAula(a) = <PENDIENTE>;
 
+-- ============================================================
+-- CICLO DE VIDA DE LA EVACUACIÓN
+-- ============================================================
+
+  -- ----------------------------------------------------------
+  -- activarAlerta: recibe la señal sísmica e inicia el proceso.
+  -- Pre : el sistema está INACTIVO.
+  -- Post: el sistema pasa a ALERTA, listo para asignar rutas.
+  -- ----------------------------------------------------------
   public activarAlerta: () ==> ()
   activarAlerta() ==
     estado := <ALERTA>
   pre  estado = <INACTIVO>
   post estado = <ALERTA>;
 
-  -- Asigna rutas a todas las aulas y pasa a EVACUANDO
-  -- TODO (E3-18): llamar planif.asignarTodas, poblar asignacion,
-  --               marcar SIN_RUTA donde aplique
+  -- ----------------------------------------------------------
+  -- asignarRutas: calcula y asigna una ruta a cada aula ocupada.
+  --
+  -- Proceso:
+  --   1. Delega en Planificador.asignarTodas (orden CCRP).
+  --   2. Para cada aula:
+  --      · Si obtuvo ruta → estado EN_TRANSITO
+  --      · Si no hay ruta (bloqueado/sin capacidad) → SIN_RUTA
+  --      · Si ocupación = 0 → EVACUADA directamente
+  --   3. El sistema pasa a EVACUANDO.
+  --
+  -- Pre : estado = ALERTA.
+  -- Post: estado = EVACUANDO; I1, I2 e I4 se satisfacen.
+  -- ----------------------------------------------------------
   public asignarRutas: () ==> ()
   asignarRutas() ==
-    estado := <EVACUANDO>
-  pre  estado = <ALERTA>
-  post estado = <EVACUANDO>;
+  (
+    dcl resultado : map Tipos`NodoId to [Tipos`Ruta] :=
+          planif.asignarTodas(ocupacion);
 
-  -- Bloquea un tramo y reasigna las aulas afectadas
-  -- TODO (E3-18)
+    for all a in set dom resultado do
+    (
+      asignacion := asignacion ++ {a |-> resultado(a)};
+
+      if ocupacion(a) = 0
+      then estadoAula := estadoAula ++ {a |-> <EVACUADA>}
+      else if resultado(a) = nil
+           then estadoAula := estadoAula ++ {a |-> <SIN_RUTA>}
+           else estadoAula := estadoAula ++ {a |-> <EN_TRANSITO>}
+    );
+
+    estado := <EVACUANDO>
+  )
+  pre  estado = <ALERTA>
+  post estado = <EVACUANDO> and
+       -- I4: toda aula con ocupantes tiene ruta o SIN_RUTA
+       forall a in set dom ocupacion &
+         ocupacion(a) > 0 =>
+           (asignacion(a) <> nil) or
+           (estadoAula(a) = <SIN_RUTA>);
+
+  -- ----------------------------------------------------------
+  -- bloquearTramo: registra un tramo como obstruido o dañado
+  -- y reasigna automáticamente las aulas afectadas.
+  --
+  -- Proceso:
+  --   1. Bloquea el tramo en el pabellón.
+  --   2. Busca todas las aulas cuya ruta asignada pasa por él.
+  --   3. Para cada aula afectada, solicita al Planificador
+  --      una ruta alternativa (libera la anterior y busca nueva).
+  --   4. Actualiza asignación y estado de cada aula afectada.
+  --
+  -- Pre : sistema EVACUANDO; tramo existe y está HABILITADO.
+  -- Post: ninguna ruta asignada pasa por el tramo bloqueado (I3).
+  -- ----------------------------------------------------------
   public bloquearTramo: Tipos`TramoId ==> ()
   bloquearTramo(tid) ==
-    pabellon.bloquearTramo(tid)
-  pre estado = <EVACUANDO> and
-      tid in set dom pabellon.getTramos() and
-      pabellon.getTramos()(tid).estado = <HABILITADO>;
+  (
+    -- Bloquear el tramo en el grafo
+    pabellon.bloquearTramo(tid);
 
-  -- Confirma evacuación de un aula y libera su carga
-  -- TODO (E3-18)
+    -- Reasignar aulas cuya ruta actual pasa por el tramo bloqueado
+    for all a in set dom asignacion do
+    (
+      if asignacion(a) <> nil and
+         planif.rutaUsaTramo(asignacion(a), tid, pabellon.getTramos())
+      then
+      (
+        -- Solicitar ruta alternativa (libera carga anterior internamente)
+        dcl nuevaRuta : [Tipos`Ruta] :=
+              planif.reasignarRuta(a, asignacion(a), ocupacion(a));
+
+        asignacion := asignacion ++ {a |-> nuevaRuta};
+
+        if nuevaRuta = nil
+        then estadoAula := estadoAula ++ {a |-> <SIN_RUTA>}
+        else estadoAula := estadoAula ++ {a |-> <EN_TRANSITO>}
+      )
+    )
+  )
+  pre  estado = <EVACUANDO> and
+       tid in set dom pabellon.getTramos() and
+       pabellon.getTramos()(tid).estado = <HABILITADO>
+  post -- I3: ninguna ruta asignada usa el tramo bloqueado
+       forall a in set dom asignacion &
+         asignacion(a) <> nil =>
+           not planif.rutaUsaTramo(asignacion(a), tid,
+                                   pabellon.getTramos());
+
+  -- ----------------------------------------------------------
+  -- confirmarEvacuada: registra que los ocupantes de un aula
+  -- han salido del edificio y libera la capacidad de su ruta.
+  --
+  -- Pre : sistema EVACUANDO; el aula está EN_TRANSITO.
+  -- Post: aula EVACUADA, ocupación = 0, carga de su ruta liberada.
+  -- ----------------------------------------------------------
   public confirmarEvacuada: Tipos`NodoId ==> ()
   confirmarEvacuada(a) ==
-    estadoAula := estadoAula ++ {a |-> <EVACUADA>}
-  pre estado = <EVACUANDO> and
-      a in set dom estadoAula and
-      estadoAula(a) = <EN_TRANSITO>;
+  (
+    -- Liberar la capacidad reservada en los tramos de la ruta
+    if asignacion(a) <> nil
+    then planif.liberarCapacidad(asignacion(a), ocupacion(a));
 
+    -- Actualizar estado del aula
+    ocupacion  := ocupacion  ++ {a |-> 0};
+    estadoAula := estadoAula ++ {a |-> <EVACUADA>};
+    asignacion := asignacion ++ {a |-> nil}
+  )
+  pre  estado = <EVACUANDO> and
+       a in set dom estadoAula and
+       estadoAula(a) = <EN_TRANSITO> and
+       a in set dom asignacion
+  post estadoAula(a) = <EVACUADA> and
+       ocupacion(a)  = 0;
+
+  -- ----------------------------------------------------------
+  -- finalizarEvacuacion: cierra el proceso de evacuación.
+  --
+  -- Pre : sistema EVACUANDO; TODAS las aulas están evacuadas
+  --       o tienen ocupación 0.
+  --       → Esta precondición implementa I5: el sistema no puede
+  --         declararse finalizado con personas adentro.
+  --         Si se intenta, el intérprete rechaza la operación.
+  -- Post: estado = FINALIZADO.
+  -- ----------------------------------------------------------
   public finalizarEvacuacion: () ==> ()
   finalizarEvacuacion() ==
     estado := <FINALIZADO>
-  pre estado = <EVACUANDO> and
-      forall a in set dom estadoAula &
-        estadoAula(a) = <EVACUADA> or ocupacion(a) = 0
+  pre  estado = <EVACUANDO> and
+       forall a in set dom estadoAula &
+         estadoAula(a) = <EVACUADA> or ocupacion(a) = 0
   post estado = <FINALIZADO>;
 
+-- ============================================================
+-- CONSULTORES DE ESTADO
+-- ============================================================
+
+  -- Estado global del sistema
   public getEstado: () ==> Tipos`EstadoSist
   getEstado() == return estado;
+
+  -- Estado de evacuación de un aula específica
+  public getEstadoAula: Tipos`NodoId ==> Tipos`EstadoAula
+  getEstadoAula(a) == return estadoAula(a)
+  pre a in set dom estadoAula;
+
+  -- Ruta asignada a un aula (nil si no tiene)
+  public getAsignacion: Tipos`NodoId ==> [Tipos`Ruta]
+  getAsignacion(a) == return asignacion(a)
+  pre a in set dom asignacion;
+
+  -- Ocupación actual de un aula
+  public getOcupacion: Tipos`NodoId ==> nat
+  getOcupacion(a) == return ocupacion(a)
+  pre a in set dom ocupacion;
+
+  -- Mapa completo de asignaciones
+  public getTodasAsignaciones: () ==> map Tipos`NodoId to [Tipos`Ruta]
+  getTodasAsignaciones() == return asignacion;
+
+  -- Conjunto de aulas pendientes (con ocupantes, sin ruta aún)
+  public getAulasPendientes: () ==> set of Tipos`NodoId
+  getAulasPendientes() ==
+    return {a | a in set dom estadoAula & estadoAula(a) = <PENDIENTE>};
+
+  -- Conjunto de aulas sin ruta factible
+  public getAulasSinRuta: () ==> set of Tipos`NodoId
+  getAulasSinRuta() ==
+    return {a | a in set dom estadoAula & estadoAula(a) = <SIN_RUTA>};
+
+  -- Conjunto de aulas ya evacuadas
+  public getAulasEvacuadas: () ==> set of Tipos`NodoId
+  getAulasEvacuadas() ==
+    return {a | a in set dom estadoAula & estadoAula(a) = <EVACUADA>};
+
+  -- Total de personas aún en el edificio
+  public totalOcupantes: () ==> nat
+  totalOcupantes() ==
+  (
+    dcl total : nat := 0;
+    for all a in set dom ocupacion do
+      total := total + ocupacion(a);
+    return total
+  );
+
+-- ============================================================
+-- VERIFICACIÓN DE INVARIANTES (para pruebas y POG)
+-- Permiten verificar explícitamente cada invariante en tests.
+-- ============================================================
+
+  -- Verifica I1: todas las rutas asignadas son válidas
+  public verificarI1: () ==> bool
+  verificarI1() ==
+    return forall a in set dom asignacion &
+      asignacion(a) <> nil and a in set dom ocupacion =>
+        planif.esRutaValida(asignacion(a),
+                           pabellon.getTramos(),
+                           pabellon.getSalidas(),
+                           planif.getCarga(),
+                           ocupacion(a));
+
+  -- Verifica I2: ningún tramo supera su capacidad A.130
+  public verificarI2: () ==> bool
+  verificarI2() ==
+  (
+    dcl tramos_map : map Tipos`TramoId to Tipos`Tramo := pabellon.getTramos();
+    dcl carga_map  : map Tipos`TramoId to nat         := planif.getCarga();
+    return forall tid in set dom carga_map &
+      tid in set dom tramos_map =>
+        carga_map(tid) <= Tipos`capacidad(tramos_map(tid))
+  );
+
+  -- Verifica I4: durante EVACUANDO toda aula ocupada tiene ruta o SIN_RUTA
+  public verificarI4: () ==> bool
+  verificarI4() ==
+    return estado <> <EVACUANDO> or
+           forall a in set dom ocupacion &
+             ocupacion(a) > 0 =>
+               (a in set dom asignacion and asignacion(a) <> nil) or
+               (a in set dom estadoAula and estadoAula(a) = <SIN_RUTA>);
+
+  -- Verifica I5: FINALIZADO implica ocupación 0 en todas las aulas
+  public verificarI5: () ==> bool
+  verificarI5() ==
+    return estado <> <FINALIZADO> or
+           forall a in set dom ocupacion & ocupacion(a) = 0;
+
+  -- Verifica todos los invariantes de seguridad
+  public verificarTodosInvariantes: () ==> bool
+  verificarTodosInvariantes() ==
+  (
+    dcl i1 : bool := verificarI1();
+    dcl i2 : bool := verificarI2();
+    dcl i4 : bool := verificarI4();
+    dcl i5 : bool := verificarI5();
+    return i1 and i2 and i4 and i5
+  );
 
 end SistemaEvacuacion

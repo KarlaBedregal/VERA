@@ -1,41 +1,162 @@
 -- ============================================================
 -- PabellonUNSA.vdmpp
--- Instancia real del pabellón UNSA medido en campo (E3-07)
--- Datos fuente: data/pabellon-medidas.csv
+-- Pabellón de referencia dimensionado con mínimos A.130 RNE.
+--
+-- JUSTIFICACIÓN DE LA INSTANCIA DE REFERENCIA
+-- Para la validación formal se usa un pabellón de referencia
+-- representativo de las edificaciones académicas de la UNSA,
+-- dimensionado con los parámetros mínimos de la Norma A.130
+-- del RNE. El modelo es independiente de los datos: cualquier
+-- pabellón real puede cargarse como subclase de Pabellon.
+--
+-- TOPOLOGÍA: 3 pisos, 4 aulas por piso, 2 escaleras, 2 salidas
+--
+--   Piso 2 ┌────A201──A202─── P250 ──A203──A204────┐
+--          │   DE261(esc A)──────────────DE262(esc B)│
+--          └────────────────────┬───────────────────┘
+--                             ESCALERA
+--   Piso 1 ┌────A101──A102─── P150 ──A103──A104────┐
+--          │   DE161(esc A)──────────────DE162(esc B)│
+--          └────────────────────┬───────────────────┘
+--                             ESCALERA
+--   Piso 0 ┌────  A1── A2  ─── P050 ── A3── A4 ───┐
+--          │           S91(salida A)  S92(salida B) │
+--          └─────────────────────────────────────────┘
+--
+-- DIMENSIONES (Norma A.130 del RNE):
+--   Puerta de aula   : 1.00 m → capacidad 200 personas
+--   Pasillo central  : 2.40 m → capacidad 480 personas
+--   Escalera         : 1.20 m → capacidad 150 personas
+--   Puerta de salida : 1.00 m → capacidad 200 personas
+--   Ocupación/aula   : 30 personas
+--
+-- CONVENCIÓN DE IDs:
+--   Nodos : piso 2 → 200s, piso 1 → 100s, piso 0 → 1–99
+--            x01–x04 = aulas, x50 = pasillo,
+--            x61/x62 = descansos escalera A/B, 91/92 = salidas
+--   Tramos: 1xxx = pasillo, 2xxx = escalera,
+--            3xxx = puerta aula, 4xxx = puerta salida
+--
 -- Responsable: C4   Revisor: C2
 -- VERA · UNSA 2026-B
 -- ============================================================
 class PabellonUNSA is subclass of Pabellon
 
+-- ============================================================
+-- CONSTRUCTOR + INICIALIZACIÓN
+-- ============================================================
 operations
 
-  -- Carga el grafo completo del pabellón con datos reales.
-  -- TODO (E3-19): completar tras la medición del jueves 15 oct.
-  --
-  -- Convención de IDs:
-  --   Nodos:  1xx = piso 1,  2xx = piso 2,  3xx = piso 3
-  --           x01–x10 = aulas,  x50 = descanso escalera,  x99 = salida
-  --   Tramos: 1xxx = pasillo,  2xxx = escalera,  3xxx = puerta
+  -- Crea el grafo completo del pabellón de referencia.
+  -- Llamar inmediatamente después de new PabellonUNSA().
   public inicializar: () ==> ()
   inicializar() ==
   (
-    -- PISO 1 ────────────────────────────────────────────
-    -- agregarNodo(mk_Tipos`Nodo(101, <AULA>,   1));
-    -- agregarNodo(mk_Tipos`Nodo(150, <PASO>,   1));
-    -- agregarNodo(mk_Tipos`Nodo(199, <SALIDA>, 1));
-    -- agregarTramo(mk_Tipos`Tramo(1001, 101, 150, <PASILLO>, 2.4, <HABILITADO>));
-    -- agregarTramo(mk_Tipos`Tramo(3001, 150, 199, <PUERTA>,  1.2, <HABILITADO>));
+    -- ──────────────────────────────────────────────────────
+    -- SALIDAS primero (para satisfacer el invariante I-P2
+    -- desde la primera llamada a agregarNodo)
+    -- ──────────────────────────────────────────────────────
+    agregarNodo(mk_Tipos`Nodo(91, <SALIDA>, 0));     -- Salida A (exterior)
+    agregarNodo(mk_Tipos`Nodo(92, <SALIDA>, 0));     -- Salida B (exterior)
 
-    -- PISO 2 ────────────────────────────────────────────
-    -- TODO
+    -- ──────────────────────────────────────────────────────
+    -- PISO 0 — Nodos restantes (planta baja)
+    -- ──────────────────────────────────────────────────────
+    agregarNodo(mk_Tipos`Nodo(1,  <AULA>,   0));     -- Aula 0-01
+    agregarNodo(mk_Tipos`Nodo(2,  <AULA>,   0));     -- Aula 0-02
+    agregarNodo(mk_Tipos`Nodo(3,  <AULA>,   0));     -- Aula 0-03
+    agregarNodo(mk_Tipos`Nodo(4,  <AULA>,   0));     -- Aula 0-04
+    agregarNodo(mk_Tipos`Nodo(50, <PASO>,   0));     -- Pasillo central piso 0
 
-    -- PISO 3 ────────────────────────────────────────────
-    -- TODO
+    -- ──────────────────────────────────────────────────────
+    -- PISO 1 — Nodos
+    -- ──────────────────────────────────────────────────────
+    agregarNodo(mk_Tipos`Nodo(101, <AULA>,     1));  -- Aula 1-01
+    agregarNodo(mk_Tipos`Nodo(102, <AULA>,     1));  -- Aula 1-02
+    agregarNodo(mk_Tipos`Nodo(103, <AULA>,     1));  -- Aula 1-03
+    agregarNodo(mk_Tipos`Nodo(104, <AULA>,     1));  -- Aula 1-04
+    agregarNodo(mk_Tipos`Nodo(150, <PASO>,     1));  -- Pasillo central piso 1
+    agregarNodo(mk_Tipos`Nodo(161, <DESCANSO>, 1));  -- Descanso escalera A, piso 1
+    agregarNodo(mk_Tipos`Nodo(162, <DESCANSO>, 1));  -- Descanso escalera B, piso 1
 
-    -- ESCALERA (conecta pisos) ───────────────────────────
-    -- TODO
+    -- ──────────────────────────────────────────────────────
+    -- PISO 2 — Nodos
+    -- ──────────────────────────────────────────────────────
+    agregarNodo(mk_Tipos`Nodo(201, <AULA>,     2));  -- Aula 2-01
+    agregarNodo(mk_Tipos`Nodo(202, <AULA>,     2));  -- Aula 2-02
+    agregarNodo(mk_Tipos`Nodo(203, <AULA>,     2));  -- Aula 2-03
+    agregarNodo(mk_Tipos`Nodo(204, <AULA>,     2));  -- Aula 2-04
+    agregarNodo(mk_Tipos`Nodo(250, <PASO>,     2));  -- Pasillo central piso 2
+    agregarNodo(mk_Tipos`Nodo(261, <DESCANSO>, 2));  -- Descanso escalera A, piso 2
+    agregarNodo(mk_Tipos`Nodo(262, <DESCANSO>, 2));  -- Descanso escalera B, piso 2
 
-    skip
-  );
+    -- ──────────────────────────────────────────────────────
+    -- PISO 2 — Tramos
+    -- Puertas aula → pasillo central (1.00 m c/u → cap 200)
+    -- ──────────────────────────────────────────────────────
+    agregarTramo(mk_Tipos`Tramo(3201, 201, 250, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3202, 202, 250, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3203, 203, 250, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3204, 204, 250, <PUERTA>, 1.00, <HABILITADO>));
+
+    -- Pasillo → descansos escalera (2.40 m → cap 480)
+    agregarTramo(mk_Tipos`Tramo(1261, 250, 261, <PASILLO>, 2.40, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(1262, 250, 262, <PASILLO>, 2.40, <HABILITADO>));
+
+    -- ──────────────────────────────────────────────────────
+    -- ESCALERAS piso 2 → piso 1 (1.20 m → cap 150)
+    -- ──────────────────────────────────────────────────────
+    agregarTramo(mk_Tipos`Tramo(2261, 261, 161, <ESCALERA>, 1.20, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(2262, 262, 162, <ESCALERA>, 1.20, <HABILITADO>));
+
+    -- ──────────────────────────────────────────────────────
+    -- PISO 1 — Tramos
+    -- Puertas aula → pasillo central (1.00 m → cap 200)
+    -- ──────────────────────────────────────────────────────
+    agregarTramo(mk_Tipos`Tramo(3101, 101, 150, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3102, 102, 150, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3103, 103, 150, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3104, 104, 150, <PUERTA>, 1.00, <HABILITADO>));
+
+    -- Pasillo → descansos escalera (2.40 m → cap 480)
+    -- Para descender al piso 0 vía escalera A o B
+    agregarTramo(mk_Tipos`Tramo(1161, 150, 161, <PASILLO>, 2.40, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(1162, 150, 162, <PASILLO>, 2.40, <HABILITADO>));
+
+    -- ──────────────────────────────────────────────────────
+    -- ESCALERAS piso 1 → piso 0 (1.20 m → cap 150)
+    -- Descanso piso 1 → pasillo piso 0
+    -- ──────────────────────────────────────────────────────
+    agregarTramo(mk_Tipos`Tramo(2161, 161, 50, <ESCALERA>, 1.20, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(2162, 162, 50, <ESCALERA>, 1.20, <HABILITADO>));
+
+    -- ──────────────────────────────────────────────────────
+    -- PISO 0 — Tramos
+    -- Puertas aula → pasillo central (1.00 m → cap 200)
+    -- ──────────────────────────────────────────────────────
+    agregarTramo(mk_Tipos`Tramo(3001, 1, 50, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3002, 2, 50, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3003, 3, 50, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3004, 4, 50, <PUERTA>, 1.00, <HABILITADO>));
+
+    -- Pasillo → salidas exteriores (1.00 m → cap 200 c/u)
+    agregarTramo(mk_Tipos`Tramo(4091, 50, 91, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(4092, 50, 92, <PUERTA>, 1.00, <HABILITADO>))
+  )
+  post -- Topología mínima: 21 nodos, 22 tramos, 2 salidas
+       cantidadNodos()    = 21 and
+       cantidadTramos()   = 22 and
+       cantidadSalidas()  = 2  and
+       cantidadBloqueados() = 0;
+
+-- ============================================================
+-- CONSULTOR DE OCUPACIÓN ESTÁNDAR
+-- ============================================================
+
+  -- Devuelve la ocupación inicial de todas las aulas.
+  -- Asume 30 personas por aula (Tipos`OCUPACION_AULA).
+  public ocupacionEstandar: () ==> map Tipos`NodoId to nat
+  ocupacionEstandar() ==
+    return {a |-> Tipos`OCUPACION_AULA | a in set getAulas()};
 
 end PabellonUNSA
