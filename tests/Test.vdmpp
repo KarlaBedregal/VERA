@@ -1,85 +1,470 @@
 -- ============================================================
 -- Test.vdmpp
--- Escenarios de prueba T1–T9
+-- Escenarios de prueba T1–T9 del sistema VERA.
+--
 -- Marco metodológico: NIST TN 1822 (Ronchi et al., 2013)
+-- Componentes verificados:
+--   · Uso de salidas        → T1, T6
+--   · Disponibilidad rutas  → T2, T3, T6, T7
+--   · Restricciones flujo   → T4, T5
+--   · Seguridad             → T9
+--   · Escalabilidad         → T8
+--
+-- Cómo ejecutar en Overture:
+--   Seleccionar clase Test → Run as VDM Launch Configuration
+--   Llamar cada operación T1_…() desde el intérprete.
+--   Resultado esperado: sin error en ningún test.
+--   T9 es especial: NO debe completarse (pre-condición rechaza).
+--
 -- Responsable: C3   Revisor: C2
 -- VERA · UNSA 2026-B
 -- ============================================================
 class Test
 
+-- ============================================================
+-- HELPER
+-- ============================================================
 operations
 
-  -- ─── T1: Evacuación normal ────────────────────────────────
-  -- Componente NIST: Uso de salidas
-  -- Esperado: todas las aulas con ruta válida; se usan ambas salidas
+  -- asegurar: comprueba que la condición es verdadera.
+  -- Si falla, la sentencia `error` hace que Overture reporte
+  -- la prueba como fallida con la ubicación del error.
+  private asegurar: bool ==> ()
+  asegurar(cond) ==
+    if not cond then error;
+
+-- ============================================================
+-- T1: Evacuación normal — componente "Uso de salidas"
+-- ============================================================
+--  Escenario: PabellonUNSA completo, 30 personas por aula.
+--  Esperado : todas las aulas quedan EN_TRANSITO;
+--             invariantes I1, I2, I4 se cumplen;
+--             al menos una ruta llega a cada salida.
   public T1_evacuacionNormal: () ==> ()
   T1_evacuacionNormal() ==
-    -- TODO (E3-24)
-    skip;
+  (
+    dcl pb  : PabellonUNSA   := new PabellonUNSA();
+    pb.inicializar();
 
-  -- ─── T2: Bloqueo de escalera durante evacuación ───────────
-  -- Componente NIST: Disponibilidad de rutas
-  -- Esperado: aulas afectadas reasignadas; ninguna ruta usa la escalera
+    dcl pl  : Planificador   := new Planificador(pb);
+    dcl se  : SistemaEvacuacion :=
+          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+
+    se.activarAlerta();
+    se.asignarRutas();
+
+    -- El sistema debe estar en EVACUANDO
+    asegurar(se.getEstado() = <EVACUANDO>);
+
+    -- Ninguna aula debe quedar en estado PENDIENTE
+    asegurar(se.getAulasPendientes() = {});
+
+    -- Con 30 personas/aula y PabellonUNSA bien dimensionado,
+    -- ninguna aula debe quedar SIN_RUTA
+    asegurar(se.getAulasSinRuta() = {});
+
+    -- Invariantes de seguridad I1, I2, I4
+    asegurar(se.verificarI1());
+    asegurar(se.verificarI2());
+    asegurar(se.verificarI4())
+  );
+
+-- ============================================================
+-- T2: Bloqueo de escalera durante evacuación
+--     componente "Disponibilidad de rutas"
+-- ============================================================
+--  Escenario: tras asignarRutas, se bloquea la escalera A
+--             (piso 2 → piso 1). Las aulas de piso 2 que
+--             usaban esa escalera deben redirigirse a la B.
+--  Esperado : ninguna ruta asignada usa el tramo bloqueado (2261);
+--             I1, I2, I4 siguen cumpliéndose.
   public T2_bloqueoEscalera: () ==> ()
   T2_bloqueoEscalera() ==
-    -- TODO (E3-24)
-    skip;
+  (
+    dcl pb  : PabellonUNSA   := new PabellonUNSA();
+    pb.inicializar();
+    dcl pl  : Planificador   := new Planificador(pb);
+    dcl se  : SistemaEvacuacion :=
+          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
 
-  -- ─── T3: Dos bloqueos simultáneos ─────────────────────────
-  -- Componente NIST: Disponibilidad de rutas
-  -- Esperado: reasignación correcta o SIN_RUTA; nunca ruta inválida
+    se.activarAlerta();
+    se.asignarRutas();
+
+    -- Bloquear escalera A (DE2a → DE1a, TramoId = 2261)
+    se.bloquearTramo(2261);
+
+    -- Ninguna ruta asignada debe pasar por el tramo bloqueado
+    dcl asignadas : map Tipos`NodoId to [Tipos`Ruta] :=
+          se.getTodasAsignaciones();
+    dcl tramosMap : map Tipos`TramoId to Tipos`Tramo :=
+          pb.getTramos();
+
+    asegurar(
+      forall a in set dom asignadas &
+        asignadas(a) <> nil =>
+          not pl.rutaUsaTramo(asignadas(a), 2261, tramosMap));
+
+    -- Invariantes de seguridad
+    asegurar(se.verificarI1());
+    asegurar(se.verificarI2());
+    asegurar(se.verificarI4())
+  );
+
+-- ============================================================
+-- T3: Dos bloqueos simultáneos — "Disponibilidad de rutas"
+-- ============================================================
+--  Escenario: se bloquean AMBAS escaleras (piso 2 → piso 1):
+--             T2261 y T2262. Las aulas del piso 2 pierden toda
+--             ruta de evacuación.
+--  Esperado : aulas del piso 2 quedan SIN_RUTA;
+--             ninguna ruta asignada usa los tramos bloqueados;
+--             I4 se cumple.
   public T3_dosBloqueos: () ==> ()
   T3_dosBloqueos() ==
-    -- TODO (E3-24)
-    skip;
+  (
+    dcl pb  : PabellonUNSA   := new PabellonUNSA();
+    pb.inicializar();
+    dcl pl  : Planificador   := new Planificador(pb);
+    dcl se  : SistemaEvacuacion :=
+          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
 
-  -- ─── T4: Ocupación = capacidad exacta de un tramo ─────────
-  -- Componente NIST: Restricciones de flujo
-  -- Esperado: se asigna; carga = capacidad del tramo
+    se.activarAlerta();
+    se.asignarRutas();
+
+    -- Bloquear ambas escaleras de piso 2 → piso 1
+    se.bloquearTramo(2261);
+    se.bloquearTramo(2262);
+
+    dcl asignadas : map Tipos`NodoId to [Tipos`Ruta] :=
+          se.getTodasAsignaciones();
+    dcl tramosMap : map Tipos`TramoId to Tipos`Tramo := pb.getTramos();
+
+    -- Ninguna ruta usa los tramos bloqueados
+    asegurar(
+      forall a in set dom asignadas &
+        asignadas(a) <> nil =>
+          not pl.rutaUsaTramo(asignadas(a), 2261, tramosMap) and
+          not pl.rutaUsaTramo(asignadas(a), 2262, tramosMap));
+
+    -- Las aulas del piso 2 deben quedar SIN_RUTA
+    dcl aulasPiso2 : set of Tipos`NodoId := pb.getAulasPorPiso(2);
+    asegurar(
+      forall a in set aulasPiso2 &
+        se.getEstadoAula(a) = <SIN_RUTA>);
+
+    -- I4 se cumple: aulas con ocupantes tienen ruta o SIN_RUTA
+    asegurar(se.verificarI4())
+  );
+
+-- ============================================================
+-- T4: Ocupación = capacidad exacta de un tramo
+--     componente "Restricciones de flujo"
+-- ============================================================
+--  Escenario: una sola aula (A9, nodo 1 del piso 0) con
+--             200 personas = capacidad exacta del tramo puerta
+--             (T3001, puerta 1.00m → cap 200).
+--  Esperado : la aula recibe ruta; el tramo queda cargado
+--             exactamente a su capacidad; I2 se cumple.
   public T4_capacidadExacta: () ==> ()
   T4_capacidadExacta() ==
-    -- TODO (E3-24)
-    skip;
+  (
+    dcl pb : PabellonUNSA := new PabellonUNSA();
+    pb.inicializar();
 
-  -- ─── T5: Ocupación > capacidad de la ruta más corta ───────
-  -- Componente NIST: Restricciones de flujo
-  -- Esperado: el sistema asigna una ruta alternativa más larga
+    -- Solo la aula A9 (nodo 1) con 200 personas = cap(T3001)
+    dcl ocp : map Tipos`NodoId to nat := {1 |-> 200};
+    dcl pl  : Planificador   := new Planificador(pb);
+    dcl se  : SistemaEvacuacion := new SistemaEvacuacion(pb, pl, ocp);
+
+    se.activarAlerta();
+    se.asignarRutas();
+
+    -- La aula debe haber recibido una ruta
+    asegurar(se.getEstadoAula(1) = <EN_TRANSITO>);
+
+    -- El tramo T3001 (A9→P0) debe estar exactamente lleno
+    -- cap(PUERTA, 1.00m) = floor(1.00 / 0.005) = 200
+    asegurar(pl.getCargaTramo(3001) = 200);
+
+    -- I2: ningún tramo supera su capacidad
+    asegurar(se.verificarI2())
+  );
+
+-- ============================================================
+-- T5: Ruta alternativa — "Restricciones de flujo"
+-- ============================================================
+--  Escenario: pabellón con un pasillo directo (tramo estrecho,
+--             cap 100) y una ruta alternativa más larga
+--             (tramo ancho, cap 200). El aula tiene 150 personas.
+--  Esperado : el BFS descarta la ruta directa (cap insuficiente)
+--             y asigna la alternativa más larga.
   public T5_rutaAlternativa: () ==> ()
   T5_rutaAlternativa() ==
-    -- TODO (E3-24)
-    skip;
+  (
+    -- Construcción manual del pabellón de prueba
+    dcl pb : Pabellon := new Pabellon();
 
-  -- ─── T6: Todas las salidas bloqueadas ─────────────────────
-  -- Componente NIST: Disponibilidad de rutas
-  -- Esperado: todas las aulas quedan SIN_RUTA; ninguna asignación
+    -- Salidas PRIMERO para satisfacer invariante I-P2 de Pabellon
+    pb.agregarNodo(mk_Tipos`Nodo(3, <SALIDA>, 0));  -- Salida_directa (angosta)
+    pb.agregarNodo(mk_Tipos`Nodo(5, <SALIDA>, 0));  -- Salida_alternativa (ancha)
+    -- Resto de nodos
+    pb.agregarNodo(mk_Tipos`Nodo(1, <AULA>,   0));
+    pb.agregarNodo(mk_Tipos`Nodo(2, <PASO>,   0));
+    pb.agregarNodo(mk_Tipos`Nodo(4, <PASO>,   0));
+
+    -- Tramos:
+    -- T1 : Aula → Pasillo (puerta 1.00m, cap 200)
+    pb.agregarTramo(mk_Tipos`Tramo(1, 1, 2, <PUERTA>,  1.00, <HABILITADO>));
+    -- T2 : Pasillo → Salida_directa (estrecho 0.50m, cap 100) — INSUFICIENTE
+    pb.agregarTramo(mk_Tipos`Tramo(2, 2, 3, <PUERTA>,  0.50, <HABILITADO>));
+    -- T3 : Pasillo → Pasillo_ancho (2.40m, cap 480) — ruta alternativa
+    pb.agregarTramo(mk_Tipos`Tramo(3, 2, 4, <PASILLO>, 2.40, <HABILITADO>));
+    -- T4 : Pasillo_ancho → Salida_alternativa (1.00m, cap 200) — suficiente
+    pb.agregarTramo(mk_Tipos`Tramo(4, 4, 5, <PUERTA>,  1.00, <HABILITADO>));
+
+    -- 150 personas en el aula > cap(T2)=100, pero <= cap(T4)=200
+    dcl ocp : map Tipos`NodoId to nat := {1 |-> 150};
+    dcl pl  : Planificador   := new Planificador(pb);
+    dcl se  : SistemaEvacuacion := new SistemaEvacuacion(pb, pl, ocp);
+
+    se.activarAlerta();
+    se.asignarRutas();
+
+    -- El aula debe tener ruta (la alternativa más larga)
+    asegurar(se.getEstadoAula(1) = <EN_TRANSITO>);
+
+    dcl ruta : [Tipos`Ruta] := se.getAsignacion(1);
+    asegurar(ruta <> nil);
+
+    -- La ruta debe terminar en la salida alternativa (nodo 5),
+    -- no en la salida directa (nodo 3) que no tiene capacidad
+    asegurar(ruta(len ruta) = 5);
+
+    -- I1, I2 se cumplen
+    asegurar(se.verificarI1());
+    asegurar(se.verificarI2())
+  );
+
+-- ============================================================
+-- T6: Todas las salidas bloqueadas — "Disponibilidad de rutas"
+-- ============================================================
+--  Escenario: se bloquean los dos tramos de salida (T4091 y
+--             T4092) ANTES de iniciar la evacuación.
+--  Esperado : todas las aulas con ocupantes quedan SIN_RUTA;
+--             I4 se cumple.
   public T6_todasSalidasBloqueadas: () ==> ()
   T6_todasSalidasBloqueadas() ==
-    -- TODO (E3-24)
-    skip;
+  (
+    dcl pb : PabellonUNSA := new PabellonUNSA();
+    pb.inicializar();
 
-  -- ─── T7: Bloqueo de tramo sin uso ─────────────────────────
-  -- Componente NIST: Estabilidad
-  -- Esperado: ninguna ruta asignada cambia
+    -- Bloquear ambas salidas antes de crear el sistema
+    pb.bloquearTramo(4091);
+    pb.bloquearTramo(4092);
+
+    dcl pl  : Planificador   := new Planificador(pb);
+    dcl ocp : map Tipos`NodoId to nat := pb.ocupacionEstandar();
+    dcl se  : SistemaEvacuacion := new SistemaEvacuacion(pb, pl, ocp);
+
+    se.activarAlerta();
+    se.asignarRutas();
+
+    -- Todas las aulas con ocupantes deben quedar SIN_RUTA
+    asegurar(se.getAulasSinRuta() = pb.getAulas());
+
+    -- I4: aulas con ocupantes tienen ruta (nil aquí) o SIN_RUTA
+    asegurar(se.verificarI4())
+  );
+
+-- ============================================================
+-- T7: Bloqueo de tramo sin uso — "Estabilidad"
+-- ============================================================
+--  Escenario: pabellón con ruta directa (A→P→S1) Y tramo
+--             alternativo más largo (P→EP→S2). El BFS asigna
+--             la ruta directa a ambas aulas. Luego se bloquea
+--             el tramo alternativo (no usado).
+--  Esperado : ninguna ruta asignada cambia; I1, I2, I4 se
+--             mantienen con los mismos valores.
   public T7_bloqueoSinImpacto: () ==> ()
   T7_bloqueoSinImpacto() ==
-    -- TODO (E3-24)
-    skip;
+  (
+    -- Pabellón: 2 aulas + pasillo + salida directa + camino alternativo
+    dcl pb : Pabellon := new Pabellon();
 
-  -- ─── T8: Escalabilidad (1, 3 y 6 pisos) ──────────────────
-  -- Componente NIST: Escalabilidad
-  -- Esperado: invariantes se mantienen; se reporta n.º nodos y tramos
+    -- Salidas PRIMERO para satisfacer invariante I-P2 de Pabellon
+    pb.agregarNodo(mk_Tipos`Nodo(4, <SALIDA>, 0));  -- Salida directa
+    pb.agregarNodo(mk_Tipos`Nodo(6, <SALIDA>, 0));  -- Salida alternativa
+    -- Resto de nodos
+    pb.agregarNodo(mk_Tipos`Nodo(1, <AULA>,   0));  -- Aula A
+    pb.agregarNodo(mk_Tipos`Nodo(2, <AULA>,   0));  -- Aula B
+    pb.agregarNodo(mk_Tipos`Nodo(3, <PASO>,   0));  -- Pasillo
+    pb.agregarNodo(mk_Tipos`Nodo(5, <PASO>,   0));  -- Pasillo alternativo
+
+    -- Ruta directa (2 tramos al nodo 4)
+    pb.agregarTramo(mk_Tipos`Tramo(1, 1, 3, <PUERTA>,  1.00, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(2, 2, 3, <PUERTA>,  1.00, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(3, 3, 4, <PUERTA>,  1.00, <HABILITADO>));
+    -- Ruta alternativa más larga (3 tramos al nodo 6) — NO usada por BFS
+    pb.agregarTramo(mk_Tipos`Tramo(4, 3, 5, <PASILLO>, 2.40, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(5, 5, 6, <PUERTA>,  1.00, <HABILITADO>));
+
+    dcl ocp : map Tipos`NodoId to nat := {1 |-> 30, 2 |-> 30};
+    dcl pl  : Planificador   := new Planificador(pb);
+    dcl se  : SistemaEvacuacion := new SistemaEvacuacion(pb, pl, ocp);
+
+    se.activarAlerta();
+    se.asignarRutas();
+
+    -- Antes del bloqueo: las dos aulas tienen ruta directa
+    asegurar(se.getEstadoAula(1) = <EN_TRANSITO>);
+    asegurar(se.getEstadoAula(2) = <EN_TRANSITO>);
+
+    -- Guardar rutas antes del bloqueo
+    dcl ruta1Antes : [Tipos`Ruta] := se.getAsignacion(1);
+    dcl ruta2Antes : [Tipos`Ruta] := se.getAsignacion(2);
+
+    -- Bloquear el tramo alternativo T4 (3→5, NO usado por ninguna ruta)
+    se.bloquearTramo(4);
+
+    -- Las rutas NO deben haber cambiado
+    asegurar(se.getAsignacion(1) = ruta1Antes);
+    asegurar(se.getAsignacion(2) = ruta2Antes);
+
+    -- Estados sin cambio
+    asegurar(se.getEstadoAula(1) = <EN_TRANSITO>);
+    asegurar(se.getEstadoAula(2) = <EN_TRANSITO>);
+
+    -- Invariantes se mantienen
+    asegurar(se.verificarI1());
+    asegurar(se.verificarI4())
+  );
+
+-- ============================================================
+-- T8: Escalabilidad — componente "Escalabilidad"
+-- ============================================================
+--  Escenario: se genera el mismo escenario con 1, 3 y 6 pisos.
+--  Esperado : en cada caso, la evacuación termina sin error;
+--             los invariantes I1, I2, I4 se mantienen;
+--             el número de nodos y tramos crece linealmente.
   public T8_escalabilidad: () ==> ()
   T8_escalabilidad() ==
-    -- TODO (E3-24): usar GeneradorPabellon.generar(1), generar(3), generar(6)
-    skip;
+  (
+    dcl gen : GeneradorPabellon := new GeneradorPabellon();
 
-  -- ─── T9: finalizarEvacuacion con gente adentro ────────────
-  -- Componente NIST: Seguridad
-  -- Esperado: el intérprete RECHAZA por precondición (adjuntar captura)
+    -- ── 1 piso ────────────────────────────────────────────
+    dcl pb1 : Pabellon := gen.generar(1);
+    dcl ocp1 : map Tipos`NodoId to nat :=
+                 {a |-> 30 | a in set pb1.getAulas()};
+    dcl pl1 : Planificador := new Planificador(pb1);
+    dcl se1 : SistemaEvacuacion :=
+          new SistemaEvacuacion(pb1, pl1, ocp1);
+    se1.activarAlerta();
+    se1.asignarRutas();
+    asegurar(se1.verificarI1());
+    asegurar(se1.verificarI2());
+    asegurar(se1.verificarI4());
+
+    -- ── 3 pisos ───────────────────────────────────────────
+    dcl pb3 : Pabellon := gen.generar(3);
+    dcl ocp3 : map Tipos`NodoId to nat :=
+                 {a |-> 30 | a in set pb3.getAulas()};
+    dcl pl3 : Planificador := new Planificador(pb3);
+    dcl se3 : SistemaEvacuacion :=
+          new SistemaEvacuacion(pb3, pl3, ocp3);
+    se3.activarAlerta();
+    se3.asignarRutas();
+    asegurar(se3.verificarI1());
+    asegurar(se3.verificarI2());
+    asegurar(se3.verificarI4());
+
+    -- ── 6 pisos ───────────────────────────────────────────
+    dcl pb6 : Pabellon := gen.generar(6);
+    dcl ocp6 : map Tipos`NodoId to nat :=
+                 {a |-> 30 | a in set pb6.getAulas()};
+    dcl pl6 : Planificador := new Planificador(pb6);
+    dcl se6 : SistemaEvacuacion :=
+          new SistemaEvacuacion(pb6, pl6, ocp6);
+    se6.activarAlerta();
+    se6.asignarRutas();
+    asegurar(se6.verificarI1());
+    asegurar(se6.verificarI2());
+    asegurar(se6.verificarI4());
+
+    -- Verificar crecimiento: más pisos = más nodos
+    asegurar(pb3.cantidadNodos() > pb1.cantidadNodos());
+    asegurar(pb6.cantidadNodos() > pb3.cantidadNodos())
+  );
+
+-- ============================================================
+-- T9: finalizarEvacuacion con gente adentro — "Seguridad"
+-- ============================================================
+--  Escenario: el sistema está EVACUANDO y hay aulas que aún
+--             NO han sido confirmadas como evacuadas.
+--  Esperado : la precondición de finalizarEvacuacion es FALSA.
+--             La operación NO debe poder ejecutarse en este
+--             estado (el intérprete rechaza la llamada).
+--
+--  INSTRUCCIÓN PARA CAPTURA DE PANTALLA (evidencia del entregable):
+--    Ejecutar T9_finalizarConGente() en Overture. La consola
+--    debe mostrar "Precondition failure in SistemaEvacuacion`
+--    finalizarEvacuacion". Adjuntar captura al informe.
+--
+--  NOTA: este test verifica la PRECONDICIÓN directamente sin
+--  llamar a la operación, para que el test en sí no falle
+--  por la violación de precondición. Para observar el rechazo
+--  del intérprete, llamar T9_forzarViolacion() manualmente.
   public T9_finalizarConGente: () ==> ()
   T9_finalizarConGente() ==
-    -- TODO (E3-24): construir escenario con aula PENDIENTE y
-    --               llamar finalizarEvacuacion — debe fallar la precondición
-    skip;
+  (
+    dcl pb  : PabellonUNSA := new PabellonUNSA();
+    pb.inicializar();
+    dcl pl  : Planificador := new Planificador(pb);
+    dcl se  : SistemaEvacuacion :=
+          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+
+    se.activarAlerta();
+    se.asignarRutas();
+
+    -- El sistema está EVACUANDO con 12 aulas EN_TRANSITO.
+    -- La precondición de finalizarEvacuacion requiere que TODAS
+    -- las aulas tengan estadoAula = EVACUADA o ocupacion = 0.
+    -- En este estado, la precondición NO se cumple:
+    asegurar(se.getEstado() = <EVACUANDO>);
+
+    -- Verificar directamente que la precondición ES FALSA:
+    -- (es decir, que hay aulas con gente que no están evacuadas)
+    dcl aulasPendFin : set of Tipos`NodoId :=
+          {a | a in set pb.getAulas() &
+               se.getEstadoAula(a) <> <EVACUADA> and
+               se.getOcupacion(a) > 0};
+
+    asegurar(aulasPendFin <> {});
+
+    -- La seguridad I5 garantiza que finalizarEvacuacion
+    -- con esta precondición no puede completarse:
+    -- Si se llamara: se.finalizarEvacuacion() → error de precondición
+    -- (NO se llama aquí para que T9 pase en el suite automático)
+    skip
+  );
+
+  -- Operación para demostración manual en Overture:
+  -- DEBE FALLAR con "Precondition failure" — no llamar en suite.
+  public T9_forzarViolacion: () ==> ()
+  T9_forzarViolacion() ==
+  (
+    dcl pb  : PabellonUNSA := new PabellonUNSA();
+    pb.inicializar();
+    dcl pl  : Planificador := new Planificador(pb);
+    dcl se  : SistemaEvacuacion :=
+          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+
+    se.activarAlerta();
+    se.asignarRutas();
+
+    -- Esta llamada DEBE ser rechazada por el intérprete VDM++
+    -- porque la precondición de finalizarEvacuacion no se cumple.
+    -- Capturar la pantalla del error para el entregable.
+    se.finalizarEvacuacion()  -- PRECONDITION FAILURE esperado aquí
+  );
 
 end Test

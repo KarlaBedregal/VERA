@@ -1,67 +1,347 @@
 -- ============================================================
 -- Planificador.vdmpp
--- buscarRuta (BFS iterativo con capacidad residual)
--- asignarTodas (asignación estilo CCRP)
+-- Lógica de búsqueda y asignación de rutas de evacuación.
+--
+-- Contiene tres responsabilidades principales:
+--
+-- 1. esRutaValida (función pura)
+--    Predicado formal que define QUÉ es una ruta correcta.
+--    Usada en postcondiciones e invariantes del sistema.
+--    Una ruta es válida si y solo si:
+--      (a) termina en un nodo SALIDA,
+--      (b) cada par de nodos consecutivos está conectado por
+--          un tramo HABILITADO,
+--      (c) la capacidad residual de cada tramo en la ruta es
+--          suficiente para el número de personas requerido.
+--
+-- 2. buscarRuta (BFS iterativo)
+--    Encuentra la ruta con MENOR NÚMERO DE TRAMOS desde un
+--    nodo origen hasta cualquier salida habilitada, respetando
+--    la capacidad residual de cada tramo.
+--    Devuelve nil si no existe ruta factible.
+--    Postcondición: si devuelve una ruta, ésta cumple esRutaValida.
+--
+-- 3. asignarTodas (estilo CCRP)
+--    Asigna rutas a todas las aulas con ocupación > 0, en orden
+--    de prioridad: piso más alto primero; a igual piso, mayor
+--    ocupación primero. Al asignar cada ruta reserva la capacidad
+--    correspondiente en el mapa de carga.
+--
+-- Referencia algoritmo: Lu, George & Shekhar,
+--   "Capacity Constrained Routing Algorithms for Evacuation
+--    Planning", SSTD 2005, doi:10.1007/11535331_17.
+--
 -- Responsable: C5   Revisor: C2
 -- VERA · UNSA 2026-B
 -- ============================================================
 class Planificador
 
+-- ============================================================
+-- VARIABLES DE INSTANCIA
+-- ============================================================
 instance variables
 
+  -- Grafo del pabellón sobre el que se calculan las rutas
   protected pabellon : Pabellon;
-  protected carga    : map Tipos`TramoId to nat := {|->};
 
+  -- Mapa de carga actual por tramo: TramoId → personas asignadas
+  -- Se actualiza cada vez que se asigna o libera una ruta.
+  -- Invariante de uso: carga(tid) <= Tipos`capacidad(tramo(tid))
+  protected carga : map Tipos`TramoId to nat := {|->};
+
+-- ============================================================
+-- CONSTRUCTOR
+-- ============================================================
 operations
 
+  -- Inicializa el planificador con el pabellón dado.
+  -- La carga de todos los tramos comienza en 0.
   public Planificador: Pabellon ==> Planificador
   Planificador(p) ==
   (
     pabellon := p;
     carga    := {tid |-> 0 | tid in set dom p.getTramos()}
-  );
+  )
+  post dom carga = dom p.getTramos() and
+       forall tid in set dom carga & carga(tid) = 0;
 
-  -- BFS iterativo desde `origen` hasta cualquier salida habilitada.
-  -- Considera solo tramos HABILITADOS con capacidad residual >= personas.
-  -- Devuelve nil si no existe ruta factible.
-  -- TODO (E3-13 sin capacidad, E3-16 con capacidad)
+-- ============================================================
+-- BÚSQUEDA DE RUTAS (BFS ITERATIVO)
+-- ============================================================
+
+  -- ----------------------------------------------------------
+  -- buscarRuta: BFS iterativo desde `origen` hasta la salida
+  -- más cercana (en número de tramos) con capacidad suficiente.
+  --
+  -- Algoritmo:
+  --   Cola FIFO de pares (nodoActual, caminoHastaAquí).
+  --   Se expanden solo tramos HABILITADOS con capacidad
+  --   residual >= personas.
+  --   El primer nodo SALIDA que se alcanza termina la búsqueda
+  --   (propiedad BFS: es el de menor número de tramos).
+  --
+  -- Pre : el nodo origen existe en el grafo.
+  -- Post: si el resultado no es nil, cumple esRutaValida.
+  -- ----------------------------------------------------------
   public buscarRuta: Tipos`NodoId * nat ==> [Tipos`Ruta]
   buscarRuta(origen, personas) ==
-    -- TODO: implementar BFS iterativo usando while y una cola explícita
-    return nil
-  pre origen in set dom pabellon.getNodos()
-  post RESULT <> nil =>
-         esRutaValida(RESULT, pabellon.getTramos(),
-                      pabellon.getSalidas(), carga, personas);
+    dcl cola      : seq of (Tipos`NodoId * Tipos`Ruta)
+                    := [mk_(origen, [origen])];
+    dcl visitados : set of Tipos`NodoId := {origen};
+    dcl resultado : [Tipos`Ruta]        := nil;
+    (
+      while cola <> [] and resultado = nil do
+      (
+        dcl par    : Tipos`NodoId * Tipos`Ruta := hd cola;
+        dcl nodo   : Tipos`NodoId              := #1(par);
+        dcl camino : Tipos`Ruta                := #2(par);
+        cola := tl cola;
 
-  -- Asigna rutas a todas las aulas de `ocupacion` con ocupación > 0.
-  -- Orden: piso más alto primero; a igual piso, mayor ocupación primero.
-  -- Reserva la capacidad en `carga` al asignar cada ruta.
-  -- TODO (E3-17)
+        -- Si llegamos a una salida, esta ruta es la solución
+        if nodo in set pabellon.getSalidas()
+        then resultado := camino
+        else
+          -- Expandir vecinos habilitados con capacidad suficiente
+          for all t in set pabellon.getTramosDesde(nodo) do
+          (
+            dcl cargaActual : nat :=
+              if t.id in set dom carga then carga(t.id) else 0;
+
+            if t.estado = <HABILITADO>
+               and Tipos`capacidadResidual(t, cargaActual) >= personas
+               and t.destino not in set visitados
+            then
+            (
+              visitados := visitados union {t.destino};
+              cola      := cola ^ [mk_(t.destino, camino ^ [t.destino])]
+            )
+          )
+      );
+      return resultado
+    )
+  pre  origen in set dom pabellon.getNodos()
+  post RESULT <> nil =>
+         esRutaValida(RESULT,
+                      pabellon.getTramos(),
+                      pabellon.getSalidas(),
+                      carga,
+                      personas);
+
+-- ============================================================
+-- ASIGNACIÓN DE RUTAS (estilo CCRP)
+-- ============================================================
+
+  -- ----------------------------------------------------------
+  -- asignarTodas: asigna rutas a todas las aulas con ocupantes.
+  --
+  -- Orden de prioridad:
+  --   1. Piso más alto primero (evacuación de arriba hacia abajo)
+  --   2. A igual piso, mayor ocupación primero
+  --
+  -- Para cada aula (en orden de prioridad):
+  --   - Busca la ruta más corta con capacidad suficiente.
+  --   - Si la encuentra: la asigna y reserva la capacidad.
+  --   - Si no: asigna nil (el aula quedará marcada SIN_RUTA).
+  --
+  -- Pre : todas las aulas en `ocupacion` existen en el pabellón.
+  -- Post: devuelve un mapa completo aula → ruta (o nil).
+  --       Toda ruta asignada (no nil) cumple esRutaValida.
+  -- ----------------------------------------------------------
   public asignarTodas: map Tipos`NodoId to nat ==>
                        map Tipos`NodoId to [Tipos`Ruta]
   asignarTodas(ocupacion) ==
-    -- TODO: implementar orden de prioridad + llamada a buscarRuta + reserva
-    return {a |-> nil | a in set dom ocupacion}
-  pre forall a in set dom ocupacion &
-        a in set pabellon.getAulas();
+    dcl pendientes : set of Tipos`NodoId           := dom ocupacion;
+    dcl asignacion : map Tipos`NodoId to [Tipos`Ruta] := {|->};
+    (
+      while pendientes <> {} do
+      (
+        -- Seleccionar aula de mayor prioridad:
+        -- ninguna otra en pendientes tiene piso más alto,
+        -- ni igual piso con mayor ocupación.
+        dcl nm : map Tipos`NodoId to Tipos`Nodo := pabellon.getNodos();
+        dcl siguiente : Tipos`NodoId :=
+              let a in set pendientes be st
+                not exists b in set pendientes &
+                  nm(b).piso > nm(a).piso or
+                  (nm(b).piso = nm(a).piso and
+                   ocupacion(b) > ocupacion(a))
+              in a;
 
+        -- Buscar ruta solo si el aula tiene ocupantes
+        dcl ruta : [Tipos`Ruta] := nil;
+        if ocupacion(siguiente) > 0
+        then ruta := buscarRuta(siguiente, ocupacion(siguiente));
+
+        -- Registrar asignación (nil si no hay ruta factible)
+        asignacion := asignacion ++ {siguiente |-> ruta};
+
+        -- Reservar capacidad en los tramos de la ruta asignada
+        if ruta <> nil
+        then reservarCapacidad(ruta, ocupacion(siguiente));
+
+        pendientes := pendientes \ {siguiente}
+      );
+      return asignacion
+    )
+  pre  forall a in set dom ocupacion & a in set pabellon.getAulas()
+  post forall a in set dom RESULT &
+         RESULT(a) <> nil =>
+           esRutaValida(RESULT(a),
+                        pabellon.getTramos(),
+                        pabellon.getSalidas(),
+                        carga,
+                        0);
+
+-- ============================================================
+-- GESTIÓN DE CARGA DE TRAMOS
+-- ============================================================
+
+  -- ----------------------------------------------------------
+  -- reservarCapacidad: suma `personas` a la carga de cada
+  -- tramo que forma parte de la ruta.
+  -- Llamada internamente al asignar una ruta.
+  -- ----------------------------------------------------------
+  private reservarCapacidad: Tipos`Ruta * nat ==> ()
+  reservarCapacidad(ruta, personas) ==
+    for i = 1 to len ruta - 1 do
+    (
+      dcl t : [Tipos`Tramo] := pabellon.getTramoEntre(ruta(i), ruta(i+1));
+      if t <> nil
+      then
+      (
+        dcl tid : Tipos`TramoId := t.id;
+        if tid in set dom carga
+        then carga := carga ++ {tid |-> carga(tid) + personas}
+        else carga := carga ++ {tid |-> personas}
+      )
+    )
+  pre len ruta >= 2;
+
+  -- ----------------------------------------------------------
+  -- liberarCapacidad: resta `personas` de la carga de cada
+  -- tramo de la ruta. Llamada al confirmar evacuación de un aula.
+  -- No baja de 0 (guarda contra posibles inconsistencias).
+  -- ----------------------------------------------------------
+  public liberarCapacidad: Tipos`Ruta * nat ==> ()
+  liberarCapacidad(ruta, personas) ==
+    for i = 1 to len ruta - 1 do
+    (
+      dcl t : [Tipos`Tramo] := pabellon.getTramoEntre(ruta(i), ruta(i+1));
+      if t <> nil
+      then
+      (
+        dcl tid : Tipos`TramoId := t.id;
+        if tid in set dom carga and carga(tid) >= personas
+        then carga := carga ++ {tid |-> carga(tid) - personas}
+        else if tid in set dom carga
+             then carga := carga ++ {tid |-> 0}
+      )
+    )
+  pre len ruta >= 2;
+
+  -- ----------------------------------------------------------
+  -- reasignarRuta: recalcula la ruta de un aula específica.
+  -- Usada por SistemaEvacuacion al bloquear un tramo.
+  -- Primero libera la carga de la ruta anterior (si existía).
+  -- ----------------------------------------------------------
+  public reasignarRuta: Tipos`NodoId * [Tipos`Ruta] * nat ==> [Tipos`Ruta]
+  reasignarRuta(aula, rutaAnterior, personas) ==
+  (
+    -- Liberar carga de la ruta anterior
+    if rutaAnterior <> nil
+    then liberarCapacidad(rutaAnterior, personas);
+
+    -- Buscar nueva ruta
+    dcl nuevaRuta : [Tipos`Ruta] := nil;
+    if personas > 0
+    then nuevaRuta := buscarRuta(aula, personas);
+
+    -- Reservar capacidad de la nueva ruta
+    if nuevaRuta <> nil
+    then reservarCapacidad(nuevaRuta, personas);
+
+    return nuevaRuta
+  )
+  pre aula in set dom pabellon.getNodos();
+
+-- ============================================================
+-- CONSULTORES
+-- ============================================================
+
+  -- Devuelve el mapa de carga actual
   public getCarga: () ==> map Tipos`TramoId to nat
   getCarga() == return carga;
 
+  -- Devuelve la carga actual de un tramo específico
+  public getCargaTramo: Tipos`TramoId ==> nat
+  getCargaTramo(tid) ==
+    if tid in set dom carga then return carga(tid) else return 0;
+
+  -- Devuelve la capacidad residual de un tramo
+  public getCapacidadResidual: Tipos`TramoId ==> nat
+  getCapacidadResidual(tid) ==
+    if tid in set dom pabellon.getTramos()
+    then
+      let t = pabellon.getTramos()(tid) in
+      let c = if tid in set dom carga then carga(tid) else 0 in
+        return Tipos`capacidadResidual(t, c)
+    else return 0
+  pre tid in set dom pabellon.getTramos();
+
+  -- Reinicia toda la carga a 0 (para pruebas)
+  public reiniciarCarga: () ==> ()
+  reiniciarCarga() ==
+    carga := {tid |-> 0 | tid in set dom pabellon.getTramos()};
+
+-- ============================================================
+-- FUNCIONES PURAS (sin efectos secundarios)
+-- ============================================================
 functions
 
-  -- Verifica que una ruta sea válida:
-  -- (1) nodos consecutivos están conectados por un tramo HABILITADO
-  -- (2) termina en una salida
-  -- (3) capacidad residual >= personas en cada tramo de la ruta
-  -- TODO (E3-12)
+  -- ----------------------------------------------------------
+  -- esRutaValida: predicado formal de corrección de una ruta.
+  --
+  -- Una ruta es válida si y solo si:
+  --   (a) el último nodo es una SALIDA habilitada,
+  --   (b) cada par de nodos consecutivos (ruta(i), ruta(i+1))
+  --       tiene un tramo HABILITADO entre ellos,
+  --   (c) cada uno de esos tramos tiene capacidad residual
+  --       suficiente para `personas` personas adicionales.
+  --
+  -- Esta función es la especificación formal de seguridad:
+  -- el sistema GARANTIZA que solo asigna rutas que la cumplen.
+  -- ----------------------------------------------------------
   public esRutaValida: Tipos`Ruta * map Tipos`TramoId to Tipos`Tramo *
                        set of Tipos`NodoId * map Tipos`TramoId to nat *
                        nat -> bool
-  esRutaValida(ruta, tramos, salidas, carga, personas) ==
-    -- TODO
-    false
+  esRutaValida(ruta, tramos, salidas, cargaMap, personas) ==
+    -- (a) termina en una salida
+    ruta(len ruta) in set salidas
+    and
+    -- (b) y (c): cada tramo consecutivo existe, está habilitado
+    --            y tiene capacidad residual suficiente
+    forall i in set {1, ..., len ruta - 1} &
+      exists tid in set dom tramos &
+        tramos(tid).origen  = ruta(i)      and
+        tramos(tid).destino = ruta(i + 1)  and
+        tramos(tid).estado  = <HABILITADO> and
+        (let cargaActual = if tid in set dom cargaMap
+                           then cargaMap(tid) else 0 in
+           cargaActual + personas <= Tipos`capacidad(tramos(tid)))
+  pre len ruta >= 2;
+
+  -- ----------------------------------------------------------
+  -- rutaUsaTramo: verdadero si la ruta pasa por el tramo `tid`.
+  -- Usada por SistemaEvacuacion para detectar qué rutas quedan
+  -- inválidas al bloquearse un tramo.
+  -- ----------------------------------------------------------
+  public rutaUsaTramo: Tipos`Ruta * Tipos`TramoId *
+                       map Tipos`TramoId to Tipos`Tramo -> bool
+  rutaUsaTramo(ruta, tid, tramos) ==
+    tid in set dom tramos and
+    exists i in set {1, ..., len ruta - 1} &
+      tramos(tid).origen  = ruta(i) and
+      tramos(tid).destino = ruta(i + 1)
   pre len ruta >= 2;
 
 end Planificador

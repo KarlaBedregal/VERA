@@ -1,46 +1,218 @@
 -- ============================================================
 -- Tipos.vdmpp
--- Tipos base, records y función auxiliar capacidad (Norma A.130)
+-- Tipos base, records, constantes y funciones auxiliares puras
+-- del sistema de evacuación sísmica VERA.
+--
+-- Este módulo es la base de toda la especificación: define los
+-- elementos del grafo del pabellón (nodos y tramos), los estados
+-- del sistema y las aulas, y las funciones de capacidad según la
+-- Norma A.130 "Requisitos de Seguridad" del RNE.
+--
+-- Norma A.130 aplicada:
+--   · Pasillos y puertas : capacidad = floor(ancho / 0.005)
+--   · Escaleras          : capacidad = floor(ancho / 0.008)
+--   · Ancho mínimo puerta: 1.00 m (Art. 22)
+--
 -- Responsable: C2   Revisor: C5
 -- VERA · UNSA 2026-B
 -- ============================================================
 class Tipos
 
+-- ============================================================
+-- VALORES CONSTANTES
+-- Factores de la Norma A.130 y límites mínimos del modelo.
+-- ============================================================
+values
+
+  -- Factor de cálculo de capacidad para pasillos y puertas (m/persona)
+  public FACTOR_PASILLO  : real = 0.005;
+
+  -- Factor de cálculo de capacidad para escaleras (m/persona)
+  public FACTOR_ESCALERA : real = 0.008;
+
+  -- Ancho mínimo de una puerta de evacuación según Art. 22 A.130 (m)
+  public ANCHO_MIN_PUERTA : real = 1.00;
+
+  -- Ocupación típica de un aula académica estándar (personas)
+  -- Usado como referencia en el pabellón de referencia
+  public OCUPACION_AULA : nat1 = 30;
+
+-- ============================================================
+-- TIPOS BÁSICOS
+-- Identificadores únicos para nodos y tramos del grafo.
+-- ============================================================
 types
 
-  public NodoId   = nat1;
-  public TramoId  = nat1;
+  -- Identificador único de un nodo (aula, pasillo, escalera, salida)
+  public NodoId  = nat1;
 
-  public TipoNodo    = <AULA> | <PASO> | <DESCANSO> | <SALIDA>;
-  public TipoTramo   = <PASILLO> | <ESCALERA> | <PUERTA>;
+  -- Identificador único de un tramo (conexión entre dos nodos)
+  public TramoId = nat1;
+
+  -- ─── Tipo de nodo ─────────────────────────────────────────
+  -- AULA     : espacio académico con ocupantes a evacuar
+  -- PASO     : pasillo o corredor de circulación
+  -- DESCANSO : descanso o rellano de escalera
+  -- SALIDA   : puerta exterior de evacuación (destino final)
+  public TipoNodo = <AULA> | <PASO> | <DESCANSO> | <SALIDA>;
+
+  -- ─── Tipo de tramo ────────────────────────────────────────
+  -- Determina el factor A.130 que se aplica al calcular capacidad
+  public TipoTramo = <PASILLO> | <ESCALERA> | <PUERTA>;
+
+  -- ─── Estado de un tramo ───────────────────────────────────
+  -- HABILITADO : transitable, puede usarse en rutas
+  -- BLOQUEADO  : obstruido o dañado, NO puede usarse en rutas
   public EstadoTramo = <HABILITADO> | <BLOQUEADO>;
-  public EstadoAula  = <PENDIENTE> | <EN_TRANSITO> | <EVACUADA> | <SIN_RUTA>;
-  public EstadoSist  = <INACTIVO> | <ALERTA> | <EVACUANDO> | <FINALIZADO>;
 
-  public Nodo :: id   : NodoId
-                 tipo : TipoNodo
-                 piso : nat;
+  -- ─── Estado de evacuación de un aula ─────────────────────
+  -- PENDIENTE   : tiene ocupantes, aún no se le asignó ruta
+  -- EN_TRANSITO : ruta asignada, ocupantes moviéndose
+  -- EVACUADA    : ocupación = 0, proceso completado
+  -- SIN_RUTA    : no existe ruta factible (todas bloqueadas
+  --               o sin capacidad suficiente)
+  public EstadoAula = <PENDIENTE> | <EN_TRANSITO> | <EVACUADA> | <SIN_RUTA>;
 
-  public Tramo :: id      : TramoId
-                  origen  : NodoId
-                  destino : NodoId
-                  tipo    : TipoTramo
-                  ancho   : real
+  -- ─── Estado global del sistema ────────────────────────────
+  -- INACTIVO   : estado normal, sin alerta activa
+  -- ALERTA     : señal sísmica recibida, pendiente de asignar rutas
+  -- EVACUANDO  : rutas asignadas, evacuación en curso
+  -- FINALIZADO : todas las aulas evacuadas, proceso cerrado
+  public EstadoSist = <INACTIVO> | <ALERTA> | <EVACUANDO> | <FINALIZADO>;
+
+-- ============================================================
+-- RECORDS
+-- Estructuras de datos del grafo del pabellón.
+-- ============================================================
+
+  -- ─── Nodo del grafo ───────────────────────────────────────
+  -- Representa cualquier punto del pabellón: aula, pasillo,
+  -- descanso de escalera o salida exterior.
+  public Nodo :: id   : NodoId   -- identificador único
+                 tipo : TipoNodo -- categoría del nodo
+                 piso : nat;     -- piso donde se ubica (0 = planta baja)
+
+  -- ─── Tramo del grafo ──────────────────────────────────────
+  -- Conexión dirigida entre dos nodos del pabellón.
+  -- El ancho determina la capacidad máxima según la Norma A.130.
+  -- Invariante: el tramo no puede conectar un nodo consigo mismo
+  --             y su ancho debe ser positivo.
+  public Tramo :: id      : TramoId    -- identificador único
+                  origen  : NodoId     -- nodo de inicio del tramo
+                  destino : NodoId     -- nodo de destino del tramo
+                  tipo    : TipoTramo  -- pasillo, escalera o puerta
+                  ancho   : real       -- ancho en metros
                   estado  : EstadoTramo
   inv t == t.origen <> t.destino and t.ancho > 0;
 
+  -- ─── Ruta de evacuación ───────────────────────────────────
+  -- Secuencia ordenada de nodos desde un aula hasta una salida.
+  -- Debe tener al menos 2 nodos (origen y destino).
   public Ruta = seq1 of NodoId;
 
+-- ============================================================
+-- FUNCIONES AUXILIARES PURAS
+-- Sin efectos secundarios. Usadas en invariantes, pre/post
+-- condiciones y en la lógica del Planificador.
+-- ============================================================
 functions
 
-  -- Capacidad máxima según Norma A.130 RNE
-  -- Pasillo/puerta: floor(ancho / 0.005)
-  -- Escalera      : floor(ancho / 0.008)
+  -- ----------------------------------------------------------
+  -- capacidad: calcula la capacidad máxima de un tramo
+  -- según la Norma A.130 del RNE.
+  --
+  -- Escalera : floor(ancho / 0.008)
+  -- Pasillo  : floor(ancho / 0.005)
+  -- Puerta   : floor(ancho / 0.005)
+  --
+  -- Precondición: el ancho del tramo debe ser al menos el factor
+  -- mínimo correspondiente para garantizar capacidad >= 1.
+  -- ----------------------------------------------------------
   public capacidad: Tramo -> nat1
   capacidad(t) ==
     if t.tipo = <ESCALERA>
-    then floor(t.ancho / 0.008)
-    else floor(t.ancho / 0.005)
-  pre t.ancho > 0;
+    then floor(t.ancho / FACTOR_ESCALERA)
+    else floor(t.ancho / FACTOR_PASILLO)
+  pre (t.tipo = <ESCALERA> and t.ancho >= FACTOR_ESCALERA) or
+      (t.tipo <> <ESCALERA> and t.ancho >= FACTOR_PASILLO);
+
+  -- ----------------------------------------------------------
+  -- capacidadPorAncho: versión directa de capacidad
+  -- sin necesidad de construir un record Tramo.
+  -- Útil para cálculos rápidos con datos crudos.
+  -- ----------------------------------------------------------
+  public capacidadPorAncho: TipoTramo * real -> nat1
+  capacidadPorAncho(tipo, ancho) ==
+    if tipo = <ESCALERA>
+    then floor(ancho / FACTOR_ESCALERA)
+    else floor(ancho / FACTOR_PASILLO)
+  pre (tipo = <ESCALERA> and ancho >= FACTOR_ESCALERA) or
+      (tipo <> <ESCALERA> and ancho >= FACTOR_PASILLO);
+
+  -- ----------------------------------------------------------
+  -- capacidadResidual: capacidad disponible de un tramo
+  -- dado su uso actual (carga asignada hasta el momento).
+  --
+  -- Si carga >= capacidad, el resultado es 0 (tramo lleno).
+  -- ----------------------------------------------------------
+  public capacidadResidual: Tramo * nat -> nat
+  capacidadResidual(t, carga) ==
+    let cap = capacidad(t) in
+      if carga >= cap then 0 else cap - carga
+  pre (t.tipo = <ESCALERA> and t.ancho >= FACTOR_ESCALERA) or
+      (t.tipo <> <ESCALERA> and t.ancho >= FACTOR_PASILLO);
+
+  -- ----------------------------------------------------------
+  -- Predicados de tipo de nodo
+  -- ----------------------------------------------------------
+
+  -- Verdadero si el nodo es una salida exterior
+  public esSalida: Nodo -> bool
+  esSalida(n) == n.tipo = <SALIDA>;
+
+  -- Verdadero si el nodo es un aula académica
+  public esAula: Nodo -> bool
+  esAula(n) == n.tipo = <AULA>;
+
+  -- Verdadero si el nodo es un punto de paso (pasillo o descanso)
+  public esPaso: Nodo -> bool
+  esPaso(n) == n.tipo = <PASO> or n.tipo = <DESCANSO>;
+
+  -- ----------------------------------------------------------
+  -- Predicados de estado de tramo
+  -- ----------------------------------------------------------
+
+  -- Verdadero si el tramo está habilitado (transitable)
+  public tramoHabilitado: Tramo -> bool
+  tramoHabilitado(t) == t.estado = <HABILITADO>;
+
+  -- Verdadero si el tramo está bloqueado (intransitable)
+  public tramoBloqueado: Tramo -> bool
+  tramoBloqueado(t) == t.estado = <BLOQUEADO>;
+
+  -- ----------------------------------------------------------
+  -- Predicados de estado de aula
+  -- ----------------------------------------------------------
+
+  -- Verdadero si el aula aún no fue evacuada ni tiene ruta asignada
+  public aulaPendiente: EstadoAula -> bool
+  aulaPendiente(e) == e = <PENDIENTE>;
+
+  -- Verdadero si el aula ya completó su evacuación
+  public aulaEvacuada: EstadoAula -> bool
+  aulaEvacuada(e) == e = <EVACUADA>;
+
+  -- Verdadero si el aula no pudo ser asignada a ninguna ruta
+  public aulaSinRuta: EstadoAula -> bool
+  aulaSinRuta(e) == e = <SIN_RUTA>;
+
+  -- ----------------------------------------------------------
+  -- longitudRuta: cantidad de tramos (saltos) de una ruta.
+  -- El BFS minimiza este valor al buscar la ruta más corta.
+  -- Una ruta de k nodos tiene k-1 tramos.
+  -- ----------------------------------------------------------
+  public longitudRuta: Ruta -> nat1
+  longitudRuta(r) == len r - 1
+  pre len r >= 2;
 
 end Tipos

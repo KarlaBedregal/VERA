@@ -1,15 +1,38 @@
 -- ============================================================
 -- Pabellon.vdmpp
--- Grafo del edificio: nodos, tramos, salidas, aulas
--- Invariantes estructurales del pabellón
+-- Grafo del edificio: nodos, tramos, salidas y aulas.
+--
+-- El pabellón se modela como un grafo dirigido donde:
+--   · Los NODOS representan ubicaciones: aulas, pasillos,
+--     descansos de escalera y salidas exteriores.
+--   · Los TRAMOS representan conexiones entre ubicaciones
+--     (pasillos, escaleras, puertas) con un ancho y estado.
+--
+-- Esta clase define la topología estática del edificio y sus
+-- invariantes estructurales. Es la base sobre la que el
+-- Planificador calcula las rutas de evacuación.
+--
+-- Invariantes estructurales garantizados:
+--   I-P1: los extremos de todo tramo son nodos existentes
+--   I-P2: el pabellón tiene al menos una salida
+--   I-P3: no existen dos nodos con el mismo ID
+--   I-P4: no existen dos tramos con el mismo ID
+--   (I-P3 e I-P4 están implícitos en el uso de mapas)
+--
 -- Responsable: C2   Revisor: C5
 -- VERA · UNSA 2026-B
 -- ============================================================
 class Pabellon
 
+-- ============================================================
+-- VARIABLES DE INSTANCIA
+-- ============================================================
 instance variables
 
+  -- Mapa de nodos del grafo: ID → Nodo
   protected nodos  : map Tipos`NodoId  to Tipos`Nodo  := {|->};
+
+  -- Mapa de tramos del grafo: ID → Tramo
   protected tramos : map Tipos`TramoId to Tipos`Tramo := {|->};
 
   -- I-P1: los extremos de cada tramo deben existir como nodos
@@ -17,42 +40,200 @@ instance variables
         t.origen  in set dom nodos and
         t.destino in set dom nodos;
 
-  -- I-P2: si hay nodos, debe existir al menos una salida
+  -- I-P2: si el pabellón tiene nodos, debe tener al menos una salida
+  -- (garantiza que siempre existe un destino posible para las rutas)
   inv nodos <> {|->} =>
         exists n in set rng nodos & n.tipo = <SALIDA>;
 
+-- ============================================================
+-- OPERACIONES DE CONSTRUCCIÓN DEL GRAFO
+-- ============================================================
 operations
 
+  -- ----------------------------------------------------------
+  -- agregarNodo: incorpora un nodo al grafo del pabellón.
+  -- Pre : el ID del nodo no debe existir ya en el grafo.
+  -- Post: el nodo queda registrado en el mapa de nodos.
+  -- ----------------------------------------------------------
   public agregarNodo: Tipos`Nodo ==> ()
   agregarNodo(n) ==
     nodos := nodos ++ {n.id |-> n}
-  pre n.id not in set dom nodos;
+  pre  n.id not in set dom nodos
+  post n.id in set dom nodos and nodos(n.id) = n;
 
+  -- ----------------------------------------------------------
+  -- agregarTramo: incorpora un tramo (conexión) al grafo.
+  -- Pre : el ID del tramo no existe y sus nodos extremos sí.
+  -- Post: el tramo queda registrado en el mapa de tramos.
+  -- ----------------------------------------------------------
   public agregarTramo: Tipos`Tramo ==> ()
   agregarTramo(t) ==
     tramos := tramos ++ {t.id |-> t}
-  pre t.id not in set dom tramos and
-      t.origen  in set dom nodos and
-      t.destino in set dom nodos;
+  pre  t.id not in set dom tramos and
+       t.origen  in set dom nodos and
+       t.destino in set dom nodos
+  post t.id in set dom tramos and tramos(t.id) = t;
 
+-- ============================================================
+-- OPERACIONES DE MODIFICACIÓN DE ESTADO
+-- ============================================================
+
+  -- ----------------------------------------------------------
+  -- bloquearTramo: marca un tramo como BLOQUEADO.
+  -- Representa daño estructural u obstrucción durante el sismo.
+  -- Pre : el tramo existe y está HABILITADO.
+  -- Post: el tramo queda BLOQUEADO; todo lo demás sin cambio.
+  -- ----------------------------------------------------------
   public bloquearTramo: Tipos`TramoId ==> ()
   bloquearTramo(tid) ==
     tramos := tramos ++ {tid |-> mu(tramos(tid), estado |-> <BLOQUEADO>)}
-  pre tid in set dom tramos and
-      tramos(tid).estado = <HABILITADO>;
+  pre  tid in set dom tramos and
+       tramos(tid).estado = <HABILITADO>
+  post tramos(tid).estado = <BLOQUEADO>;
 
-  public getNodos  : () ==> map Tipos`NodoId  to Tipos`Nodo
-  getNodos()  == return nodos;
+  -- ----------------------------------------------------------
+  -- habilitarTramo: restaura un tramo bloqueado a HABILITADO.
+  -- Útil para pruebas y escenarios de recuperación.
+  -- Pre : el tramo existe y está BLOQUEADO.
+  -- Post: el tramo queda HABILITADO.
+  -- ----------------------------------------------------------
+  public habilitarTramo: Tipos`TramoId ==> ()
+  habilitarTramo(tid) ==
+    tramos := tramos ++ {tid |-> mu(tramos(tid), estado |-> <HABILITADO>)}
+  pre  tid in set dom tramos and
+       tramos(tid).estado = <BLOQUEADO>
+  post tramos(tid).estado = <HABILITADO>;
 
-  public getTramos : () ==> map Tipos`TramoId to Tipos`Tramo
+-- ============================================================
+-- CONSULTORES GENERALES
+-- ============================================================
+
+  -- Devuelve el mapa completo de nodos
+  public getNodos: () ==> map Tipos`NodoId to Tipos`Nodo
+  getNodos() == return nodos;
+
+  -- Devuelve el mapa completo de tramos
+  public getTramos: () ==> map Tipos`TramoId to Tipos`Tramo
   getTramos() == return tramos;
 
+  -- Devuelve un nodo por su ID
+  -- Pre: el nodo debe existir
+  public getNodo: Tipos`NodoId ==> Tipos`Nodo
+  getNodo(nid) == return nodos(nid)
+  pre nid in set dom nodos;
+
+  -- Devuelve un tramo por su ID
+  -- Pre: el tramo debe existir
+  public getTramo: Tipos`TramoId ==> Tipos`Tramo
+  getTramo(tid) == return tramos(tid)
+  pre tid in set dom tramos;
+
+  -- Verdadero si el nodo con ese ID existe en el grafo
+  public existeNodo: Tipos`NodoId ==> bool
+  existeNodo(nid) == return nid in set dom nodos;
+
+  -- Verdadero si el tramo con ese ID existe en el grafo
+  public existeTramo: Tipos`TramoId ==> bool
+  existeTramo(tid) == return tid in set dom tramos;
+
+-- ============================================================
+-- CONSULTORES POR TIPO DE NODO
+-- ============================================================
+
+  -- Conjunto de IDs de todos los nodos de tipo SALIDA
   public getSalidas: () ==> set of Tipos`NodoId
   getSalidas() ==
     return {n.id | n in set rng nodos & n.tipo = <SALIDA>};
 
-  public getAulas  : () ==> set of Tipos`NodoId
+  -- Conjunto de IDs de todos los nodos de tipo AULA
+  public getAulas: () ==> set of Tipos`NodoId
   getAulas() ==
     return {n.id | n in set rng nodos & n.tipo = <AULA>};
+
+  -- Conjunto de IDs de nodos en un piso específico
+  public getNodosPorPiso: nat ==> set of Tipos`NodoId
+  getNodosPorPiso(piso) ==
+    return {n.id | n in set rng nodos & n.piso = piso};
+
+  -- Conjunto de IDs de aulas en un piso específico
+  public getAulasPorPiso: nat ==> set of Tipos`NodoId
+  getAulasPorPiso(piso) ==
+    return {n.id | n in set rng nodos &
+                   n.tipo = <AULA> and n.piso = piso};
+
+-- ============================================================
+-- CONSULTORES PARA EL PLANIFICADOR (usados en el BFS)
+-- ============================================================
+
+  -- ----------------------------------------------------------
+  -- getTramosDesde: todos los tramos que parten desde un nodo.
+  -- Incluye habilitados y bloqueados.
+  -- El Planificador filtra los HABILITADOS con capacidad.
+  -- ----------------------------------------------------------
+  public getTramosDesde: Tipos`NodoId ==> set of Tipos`Tramo
+  getTramosDesde(nid) ==
+    return {tramos(tid) | tid in set dom tramos &
+                          tramos(tid).origen = nid}
+  pre nid in set dom nodos;
+
+  -- ----------------------------------------------------------
+  -- getTramosHabilitadosDesde: tramos HABILITADOS desde un nodo.
+  -- Versión filtrada de getTramosDesde para uso directo en BFS.
+  -- ----------------------------------------------------------
+  public getTramosHabilitadosDesde: Tipos`NodoId ==> set of Tipos`Tramo
+  getTramosHabilitadosDesde(nid) ==
+    return {tramos(tid) | tid in set dom tramos &
+                          tramos(tid).origen = nid and
+                          tramos(tid).estado = <HABILITADO>}
+  pre nid in set dom nodos;
+
+  -- ----------------------------------------------------------
+  -- getVecinos: IDs de nodos alcanzables desde un nodo
+  -- a través de tramos HABILITADOS.
+  -- Usado por el BFS para expandir el frente de búsqueda.
+  -- ----------------------------------------------------------
+  public getVecinos: Tipos`NodoId ==> set of Tipos`NodoId
+  getVecinos(nid) ==
+    return {tramos(tid).destino | tid in set dom tramos &
+                                  tramos(tid).origen = nid and
+                                  tramos(tid).estado = <HABILITADO>}
+  pre nid in set dom nodos;
+
+  -- ----------------------------------------------------------
+  -- getTramoEntre: busca el tramo entre dos nodos específicos.
+  -- Devuelve nil si no existe tramo directo (habilitado o no).
+  -- ----------------------------------------------------------
+  public getTramoEntre: Tipos`NodoId * Tipos`NodoId ==> [Tipos`Tramo]
+  getTramoEntre(origen, destino) ==
+    let coincidentes = {tramos(tid) | tid in set dom tramos &
+                                      tramos(tid).origen  = origen and
+                                      tramos(tid).destino = destino} in
+      if coincidentes = {}
+      then return nil
+      else return let t in set coincidentes in t
+  pre origen in set dom nodos and destino in set dom nodos;
+
+-- ============================================================
+-- ESTADÍSTICAS DEL GRAFO (útiles para el artículo y pruebas)
+-- ============================================================
+
+  -- Número total de nodos del grafo
+  public cantidadNodos: () ==> nat
+  cantidadNodos() == return card dom nodos;
+
+  -- Número total de tramos del grafo
+  public cantidadTramos: () ==> nat
+  cantidadTramos() == return card dom tramos;
+
+  -- Número de tramos actualmente bloqueados
+  public cantidadBloqueados: () ==> nat
+  cantidadBloqueados() ==
+    return card {tid | tid in set dom tramos &
+                       tramos(tid).estado = <BLOQUEADO>};
+
+  -- Número de salidas disponibles (nodos tipo SALIDA)
+  public cantidadSalidas: () ==> nat
+  cantidadSalidas() ==
+    return card {n | n in set rng nodos & n.tipo = <SALIDA>};
 
 end Pabellon
