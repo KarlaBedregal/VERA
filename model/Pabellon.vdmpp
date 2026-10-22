@@ -19,6 +19,16 @@
 --   I-P4: no existen dos tramos con el mismo ID
 --   (I-P3 e I-P4 están implícitos en el uso de mapas)
 --
+-- Nota de diseño (VDM++ / VDMJ 4.7.0):
+--   · Los mapas `nodos` y `tramos` son PÚBLICOS porque las
+--     precondiciones y postcondiciones de otras clases necesitan
+--     leer el grafo, y en VDM++ una postcondición no puede llamar
+--     a operaciones (son impuras) ni a funciones de otra clase
+--     (son estáticas y no ven el estado).
+--   · Los consultores son operaciones de solo lectura; para
+--     derivar subconjuntos dentro de postcondiciones se usan
+--     las funciones puras Tipos`salidasDe / Tipos`aulasDe.
+--
 -- Responsable: C2   Revisor: C5
 -- VERA · UNSA 2026-B
 -- ============================================================
@@ -30,10 +40,10 @@ class Pabellon
 instance variables
 
   -- Mapa de nodos del grafo: ID → Nodo
-  protected nodos  : map Tipos`NodoId  to Tipos`Nodo  := {|->};
+  public nodos  : map Tipos`NodoId  to Tipos`Nodo  := {|->};
 
   -- Mapa de tramos del grafo: ID → Tramo
-  protected tramos : map Tipos`TramoId to Tipos`Tramo := {|->};
+  public tramos : map Tipos`TramoId to Tipos`Tramo := {|->};
 
   -- I-P1: los extremos de cada tramo deben existir como nodos
   inv forall t in set rng tramos &
@@ -105,8 +115,9 @@ operations
   post tramos(tid).estado = <HABILITADO>;
 
 -- ============================================================
--- CONSULTORES GENERALES
+-- CONSULTORES GENERALES (operaciones de solo lectura)
 -- ============================================================
+operations
 
   -- Devuelve el mapa completo de nodos
   public getNodos: () ==> map Tipos`NodoId to Tipos`Nodo
@@ -139,16 +150,15 @@ operations
 -- ============================================================
 -- CONSULTORES POR TIPO DE NODO
 -- ============================================================
+operations
 
   -- Conjunto de IDs de todos los nodos de tipo SALIDA
   public getSalidas: () ==> set of Tipos`NodoId
-  getSalidas() ==
-    return {n.id | n in set rng nodos & n.tipo = <SALIDA>};
+  getSalidas() == return Tipos`salidasDe(nodos);
 
   -- Conjunto de IDs de todos los nodos de tipo AULA
   public getAulas: () ==> set of Tipos`NodoId
-  getAulas() ==
-    return {n.id | n in set rng nodos & n.tipo = <AULA>};
+  getAulas() == return Tipos`aulasDe(nodos);
 
   -- Conjunto de IDs de nodos en un piso específico
   public getNodosPorPiso: nat ==> set of Tipos`NodoId
@@ -164,6 +174,7 @@ operations
 -- ============================================================
 -- CONSULTORES PARA EL PLANIFICADOR (usados en el BFS)
 -- ============================================================
+operations
 
   -- ----------------------------------------------------------
   -- getTramosDesde: todos los tramos que parten desde un nodo.
@@ -202,20 +213,31 @@ operations
   -- ----------------------------------------------------------
   -- getTramoEntre: busca el tramo entre dos nodos específicos.
   -- Devuelve nil si no existe tramo directo (habilitado o no).
+  --
+  -- Nota: si existieran dos tramos paralelos entre el mismo par
+  -- de nodos, la elección sería arbitraria (semántica del `let`
+  -- sobre conjuntos). Las instancias de referencia (PabellonUNSA
+  -- y GeneradorPabellon) no tienen tramos paralelos, por lo que
+  -- la búsqueda es determinista.
   -- ----------------------------------------------------------
   public getTramoEntre: Tipos`NodoId * Tipos`NodoId ==> [Tipos`Tramo]
   getTramoEntre(origen, destino) ==
-    let coincidentes = {tramos(tid) | tid in set dom tramos &
-                                      tramos(tid).origen  = origen and
-                                      tramos(tid).destino = destino} in
-      if coincidentes = {}
-      then return nil
-      else return let t in set coincidentes in t
+  (
+    dcl coincidentes : set of Tipos`Tramo :=
+      {tramos(tid) | tid in set dom tramos &
+                        tramos(tid).origen  = origen and
+                        tramos(tid).destino = destino};
+
+    if coincidentes = {}
+    then return nil
+    else return let t in set coincidentes in t
+  )
   pre origen in set dom nodos and destino in set dom nodos;
 
 -- ============================================================
 -- ESTADÍSTICAS DEL GRAFO (útiles para el artículo y pruebas)
 -- ============================================================
+operations
 
   -- Número total de nodos del grafo
   public cantidadNodos: () ==> nat

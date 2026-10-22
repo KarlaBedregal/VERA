@@ -10,11 +10,19 @@
 --   · Seguridad             → T9
 --   · Escalabilidad         → T8
 --
--- Cómo ejecutar en Overture:
+-- Cómo ejecutar en Overture / VDMJ:
 --   Seleccionar clase Test → Run as VDM Launch Configuration
 --   Llamar cada operación T1_…() desde el intérprete.
 --   Resultado esperado: sin error en ningún test.
 --   T9 es especial: NO debe completarse (pre-condición rechaza).
+--
+-- Desde línea de comandos (script tools/run-tests.ps1):
+--   java … -vdmpp model tests -e "new Test().T1_evacuacionNormal()"
+--
+-- Nota de sintaxis VDM++ (verificada con VDMJ 4.7.0):
+--   · El cuerpo de una operación con varias sentencias va
+--     entre paréntesis.
+--   · Las declaraciones locales (`dcl`) deben ir primero.
 --
 -- Responsable: C3   Revisor: C2
 -- VERA · UNSA 2026-B
@@ -43,12 +51,14 @@ operations
   public T1_evacuacionNormal: () ==> ()
   T1_evacuacionNormal() ==
   (
-    dcl pb  : PabellonUNSA   := new PabellonUNSA();
+    dcl pb : PabellonUNSA    := new PabellonUNSA();
+    dcl pl : Planificador;
+    dcl se : SistemaEvacuacion;
+
     pb.inicializar();
 
-    dcl pl  : Planificador   := new Planificador(pb);
-    dcl se  : SistemaEvacuacion :=
-          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
 
     se.activarAlerta();
     se.asignarRutas();
@@ -63,10 +73,14 @@ operations
     -- ninguna aula debe quedar SIN_RUTA
     asegurar(se.getAulasSinRuta() = {});
 
-    -- Invariantes de seguridad I1, I2, I4
-    asegurar(se.verificarI1());
-    asegurar(se.verificarI2());
-    asegurar(se.verificarI4())
+    -- Todas las aulas con gente deben estar EN_TRANSITO
+    asegurar(se.getAulasEvacuadas() = {});
+
+    -- Invariantes de seguridad I1, I2, I3, I4 e I5
+    asegurar(se.verificarTodosInvariantes());
+
+    -- Nadie puede quedar dentro del edificio
+    asegurar(se.totalOcupantes() = 12 * 30)
   );
 
 -- ============================================================
@@ -81,11 +95,16 @@ operations
   public T2_bloqueoEscalera: () ==> ()
   T2_bloqueoEscalera() ==
   (
-    dcl pb  : PabellonUNSA   := new PabellonUNSA();
+    dcl pb        : PabellonUNSA                := new PabellonUNSA();
+    dcl pl        : Planificador;
+    dcl se        : SistemaEvacuacion;
+    dcl asignadas : map Tipos`NodoId to [Tipos`Ruta];
+    dcl tramosMap : map Tipos`TramoId to Tipos`Tramo;
+
     pb.inicializar();
-    dcl pl  : Planificador   := new Planificador(pb);
-    dcl se  : SistemaEvacuacion :=
-          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
 
     se.activarAlerta();
     se.asignarRutas();
@@ -93,21 +112,30 @@ operations
     -- Bloquear escalera A (DE2a → DE1a, TramoId = 2261)
     se.bloquearTramo(2261);
 
-    -- Ninguna ruta asignada debe pasar por el tramo bloqueado
-    dcl asignadas : map Tipos`NodoId to [Tipos`Ruta] :=
-          se.getTodasAsignaciones();
-    dcl tramosMap : map Tipos`TramoId to Tipos`Tramo :=
-          pb.getTramos();
+    -- Ninguna ruta asignada debe pasar por el tramo bloqueado.
+    -- Se toman las asignaciones DESPUÉS del bloqueo, que es
+    -- cuando el sistema ya reasignó las rutas afectadas.
+    asignadas := se.getTodasAsignaciones();
+    tramosMap := pb.getTramos();
 
     asegurar(
       forall a in set dom asignadas &
-        asignadas(a) <> nil =>
+        (asignadas(a) <> nil) =>
           not pl.rutaUsaTramo(asignadas(a), 2261, tramosMap));
 
+    -- El tramo bloqueado queda registrado como tal
+    asegurar(pb.getTramos()(2261).estado = <BLOQUEADO>);
+
+    -- Las aulas de piso 2 deben haberse reasignado: siguen
+    -- con ruta válida y ninguna usa la escalera bloqueada
+    asegurar(
+      forall a in set pb.getAulasPorPiso(2) &
+        (se.getEstadoAula(a) = <SIN_RUTA> or
+         (se.getAsignacion(a) <> nil and
+          not pl.rutaUsaTramo(se.getAsignacion(a), 2261, tramosMap))));
+
     -- Invariantes de seguridad
-    asegurar(se.verificarI1());
-    asegurar(se.verificarI2());
-    asegurar(se.verificarI4())
+    asegurar(se.verificarTodosInvariantes())
   );
 
 -- ============================================================
@@ -122,11 +150,17 @@ operations
   public T3_dosBloqueos: () ==> ()
   T3_dosBloqueos() ==
   (
-    dcl pb  : PabellonUNSA   := new PabellonUNSA();
+    dcl pb          : PabellonUNSA                := new PabellonUNSA();
+    dcl pl          : Planificador;
+    dcl se          : SistemaEvacuacion;
+    dcl asignadas   : map Tipos`NodoId to [Tipos`Ruta];
+    dcl tramosMap   : map Tipos`TramoId to Tipos`Tramo;
+    dcl aulasPiso2  : set of Tipos`NodoId;
+
     pb.inicializar();
-    dcl pl  : Planificador   := new Planificador(pb);
-    dcl se  : SistemaEvacuacion :=
-          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
 
     se.activarAlerta();
     se.asignarRutas();
@@ -135,25 +169,29 @@ operations
     se.bloquearTramo(2261);
     se.bloquearTramo(2262);
 
-    dcl asignadas : map Tipos`NodoId to [Tipos`Ruta] :=
-          se.getTodasAsignaciones();
-    dcl tramosMap : map Tipos`TramoId to Tipos`Tramo := pb.getTramos();
+    asignadas   := se.getTodasAsignaciones();
+    tramosMap   := pb.getTramos();
+    aulasPiso2  := pb.getAulasPorPiso(2);
 
     -- Ninguna ruta usa los tramos bloqueados
     asegurar(
       forall a in set dom asignadas &
-        asignadas(a) <> nil =>
+        (asignadas(a) <> nil) =>
           not pl.rutaUsaTramo(asignadas(a), 2261, tramosMap) and
           not pl.rutaUsaTramo(asignadas(a), 2262, tramosMap));
 
     -- Las aulas del piso 2 deben quedar SIN_RUTA
-    dcl aulasPiso2 : set of Tipos`NodoId := pb.getAulasPorPiso(2);
     asegurar(
       forall a in set aulasPiso2 &
         se.getEstadoAula(a) = <SIN_RUTA>);
 
     -- I4 se cumple: aulas con ocupantes tienen ruta o SIN_RUTA
-    asegurar(se.verificarI4())
+    asegurar(se.verificarI4());
+
+    -- Las aulas de los pisos inferiores siguen evacuándose
+    asegurar(
+      forall a in set pb.getAulasPorPiso(0) &
+        se.getEstadoAula(a) = <EN_TRANSITO>)
   );
 
 -- ============================================================
@@ -168,13 +206,15 @@ operations
   public T4_capacidadExacta: () ==> ()
   T4_capacidadExacta() ==
   (
-    dcl pb : PabellonUNSA := new PabellonUNSA();
+    dcl pb : PabellonUNSA     := new PabellonUNSA();
+    dcl ocp : map Tipos`NodoId to nat := {1 |-> 200};
+    dcl pl : Planificador;
+    dcl se : SistemaEvacuacion;
+
     pb.inicializar();
 
-    -- Solo la aula A9 (nodo 1) con 200 personas = cap(T3001)
-    dcl ocp : map Tipos`NodoId to nat := {1 |-> 200};
-    dcl pl  : Planificador   := new Planificador(pb);
-    dcl se  : SistemaEvacuacion := new SistemaEvacuacion(pb, pl, ocp);
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, ocp);
 
     se.activarAlerta();
     se.asignarRutas();
@@ -186,8 +226,15 @@ operations
     -- cap(PUERTA, 1.00m) = floor(1.00 / 0.005) = 200
     asegurar(pl.getCargaTramo(3001) = 200);
 
+    -- El tramo de salida también debe estar a su capacidad
+    asegurar(pl.getCargaTramo(4091) = 200 or
+             pl.getCargaTramo(4092) = 200);
+
     -- I2: ningún tramo supera su capacidad
-    asegurar(se.verificarI2())
+    asegurar(se.verificarI2());
+
+    -- I1: la ruta asignada es válida
+    asegurar(se.verificarI1())
   );
 
 -- ============================================================
@@ -201,8 +248,11 @@ operations
   public T5_rutaAlternativa: () ==> ()
   T5_rutaAlternativa() ==
   (
-    -- Construcción manual del pabellón de prueba
-    dcl pb : Pabellon := new Pabellon();
+    dcl pb   : Pabellon                    := new Pabellon();
+    dcl ocp  : map Tipos`NodoId to nat      := {1 |-> 150};
+    dcl pl   : Planificador;
+    dcl se   : SistemaEvacuacion;
+    dcl ruta : [Tipos`Ruta];
 
     -- Salidas PRIMERO para satisfacer invariante I-P2 de Pabellon
     pb.agregarNodo(mk_Tipos`Nodo(3, <SALIDA>, 0));  -- Salida_directa (angosta)
@@ -223,9 +273,8 @@ operations
     pb.agregarTramo(mk_Tipos`Tramo(4, 4, 5, <PUERTA>,  1.00, <HABILITADO>));
 
     -- 150 personas en el aula > cap(T2)=100, pero <= cap(T4)=200
-    dcl ocp : map Tipos`NodoId to nat := {1 |-> 150};
-    dcl pl  : Planificador   := new Planificador(pb);
-    dcl se  : SistemaEvacuacion := new SistemaEvacuacion(pb, pl, ocp);
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, ocp);
 
     se.activarAlerta();
     se.asignarRutas();
@@ -233,12 +282,15 @@ operations
     -- El aula debe tener ruta (la alternativa más larga)
     asegurar(se.getEstadoAula(1) = <EN_TRANSITO>);
 
-    dcl ruta : [Tipos`Ruta] := se.getAsignacion(1);
+    ruta := se.getAsignacion(1);
     asegurar(ruta <> nil);
 
     -- La ruta debe terminar en la salida alternativa (nodo 5),
     -- no en la salida directa (nodo 3) que no tiene capacidad
     asegurar(ruta(len ruta) = 5);
+
+    -- La ruta debe tener 4 nodos: 1 → 2 → 4 → 5
+    asegurar(len ruta = 4);
 
     -- I1, I2 se cumplen
     asegurar(se.verificarI1());
@@ -255,22 +307,32 @@ operations
   public T6_todasSalidasBloqueadas: () ==> ()
   T6_todasSalidasBloqueadas() ==
   (
-    dcl pb : PabellonUNSA := new PabellonUNSA();
+    dcl pb  : PabellonUNSA             := new PabellonUNSA();
+    dcl ocp : map Tipos`NodoId to nat;
+    dcl pl  : Planificador;
+    dcl se  : SistemaEvacuacion;
+
     pb.inicializar();
 
     -- Bloquear ambas salidas antes de crear el sistema
     pb.bloquearTramo(4091);
     pb.bloquearTramo(4092);
 
-    dcl pl  : Planificador   := new Planificador(pb);
-    dcl ocp : map Tipos`NodoId to nat := pb.ocupacionEstandar();
-    dcl se  : SistemaEvacuacion := new SistemaEvacuacion(pb, pl, ocp);
+    ocp := pb.ocupacionEstandar();
+
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, ocp);
 
     se.activarAlerta();
     se.asignarRutas();
 
     -- Todas las aulas con ocupantes deben quedar SIN_RUTA
     asegurar(se.getAulasSinRuta() = pb.getAulas());
+
+    -- No debe haber ninguna ruta asignada
+    asegurar(
+      forall a in set dom se.getTodasAsignaciones() &
+        se.getAsignacion(a) = nil);
 
     -- I4: aulas con ocupantes tienen ruta (nil aquí) o SIN_RUTA
     asegurar(se.verificarI4())
@@ -288,8 +350,12 @@ operations
   public T7_bloqueoSinImpacto: () ==> ()
   T7_bloqueoSinImpacto() ==
   (
-    -- Pabellón: 2 aulas + pasillo + salida directa + camino alternativo
-    dcl pb : Pabellon := new Pabellon();
+    dcl pb          : Pabellon                    := new Pabellon();
+    dcl ocp         : map Tipos`NodoId to nat      := {1 |-> 30, 2 |-> 30};
+    dcl pl          : Planificador;
+    dcl se          : SistemaEvacuacion;
+    dcl ruta1Antes  : [Tipos`Ruta];
+    dcl ruta2Antes  : [Tipos`Ruta];
 
     -- Salidas PRIMERO para satisfacer invariante I-P2 de Pabellon
     pb.agregarNodo(mk_Tipos`Nodo(4, <SALIDA>, 0));  -- Salida directa
@@ -308,9 +374,8 @@ operations
     pb.agregarTramo(mk_Tipos`Tramo(4, 3, 5, <PASILLO>, 2.40, <HABILITADO>));
     pb.agregarTramo(mk_Tipos`Tramo(5, 5, 6, <PUERTA>,  1.00, <HABILITADO>));
 
-    dcl ocp : map Tipos`NodoId to nat := {1 |-> 30, 2 |-> 30};
-    dcl pl  : Planificador   := new Planificador(pb);
-    dcl se  : SistemaEvacuacion := new SistemaEvacuacion(pb, pl, ocp);
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, ocp);
 
     se.activarAlerta();
     se.asignarRutas();
@@ -320,8 +385,8 @@ operations
     asegurar(se.getEstadoAula(2) = <EN_TRANSITO>);
 
     -- Guardar rutas antes del bloqueo
-    dcl ruta1Antes : [Tipos`Ruta] := se.getAsignacion(1);
-    dcl ruta2Antes : [Tipos`Ruta] := se.getAsignacion(2);
+    ruta1Antes := se.getAsignacion(1);
+    ruta2Antes := se.getAsignacion(2);
 
     -- Bloquear el tramo alternativo T4 (3→5, NO usado por ninguna ruta)
     se.bloquearTramo(4);
@@ -350,14 +415,24 @@ operations
   T8_escalabilidad() ==
   (
     dcl gen : GeneradorPabellon := new GeneradorPabellon();
+    dcl pb1 : Pabellon;
+    dcl ocp1 : map Tipos`NodoId to nat;
+    dcl pl1 : Planificador;
+    dcl se1 : SistemaEvacuacion;
+    dcl pb3 : Pabellon;
+    dcl ocp3 : map Tipos`NodoId to nat;
+    dcl pl3 : Planificador;
+    dcl se3 : SistemaEvacuacion;
+    dcl pb6 : Pabellon;
+    dcl ocp6 : map Tipos`NodoId to nat;
+    dcl pl6 : Planificador;
+    dcl se6 : SistemaEvacuacion;
 
     -- ── 1 piso ────────────────────────────────────────────
-    dcl pb1 : Pabellon := gen.generar(1);
-    dcl ocp1 : map Tipos`NodoId to nat :=
-                 {a |-> 30 | a in set pb1.getAulas()};
-    dcl pl1 : Planificador := new Planificador(pb1);
-    dcl se1 : SistemaEvacuacion :=
-          new SistemaEvacuacion(pb1, pl1, ocp1);
+    pb1 := gen.generar(1);
+    ocp1 := {a |-> 30 | a in set pb1.getAulas()};
+    pl1 := new Planificador(pb1);
+    se1 := new SistemaEvacuacion(pb1, pl1, ocp1);
     se1.activarAlerta();
     se1.asignarRutas();
     asegurar(se1.verificarI1());
@@ -365,12 +440,10 @@ operations
     asegurar(se1.verificarI4());
 
     -- ── 3 pisos ───────────────────────────────────────────
-    dcl pb3 : Pabellon := gen.generar(3);
-    dcl ocp3 : map Tipos`NodoId to nat :=
-                 {a |-> 30 | a in set pb3.getAulas()};
-    dcl pl3 : Planificador := new Planificador(pb3);
-    dcl se3 : SistemaEvacuacion :=
-          new SistemaEvacuacion(pb3, pl3, ocp3);
+    pb3 := gen.generar(3);
+    ocp3 := {a |-> 30 | a in set pb3.getAulas()};
+    pl3 := new Planificador(pb3);
+    se3 := new SistemaEvacuacion(pb3, pl3, ocp3);
     se3.activarAlerta();
     se3.asignarRutas();
     asegurar(se3.verificarI1());
@@ -378,12 +451,10 @@ operations
     asegurar(se3.verificarI4());
 
     -- ── 6 pisos ───────────────────────────────────────────
-    dcl pb6 : Pabellon := gen.generar(6);
-    dcl ocp6 : map Tipos`NodoId to nat :=
-                 {a |-> 30 | a in set pb6.getAulas()};
-    dcl pl6 : Planificador := new Planificador(pb6);
-    dcl se6 : SistemaEvacuacion :=
-          new SistemaEvacuacion(pb6, pl6, ocp6);
+    pb6 := gen.generar(6);
+    ocp6 := {a |-> 30 | a in set pb6.getAulas()};
+    pl6 := new Planificador(pb6);
+    se6 := new SistemaEvacuacion(pb6, pl6, ocp6);
     se6.activarAlerta();
     se6.asignarRutas();
     asegurar(se6.verificarI1());
@@ -392,7 +463,13 @@ operations
 
     -- Verificar crecimiento: más pisos = más nodos
     asegurar(pb3.cantidadNodos() > pb1.cantidadNodos());
-    asegurar(pb6.cantidadNodos() > pb3.cantidadNodos())
+    asegurar(pb6.cantidadNodos() > pb3.cantidadNodos());
+
+    -- El crecimiento es lineal: 3 nodos por piso (2 aulas + pasillo)
+    -- + 1 descanso en los pisos > 0 + 2 salidas
+    asegurar(pb1.cantidadNodos() = 5);
+    asegurar(pb3.cantidadNodos() = 13);
+    asegurar(pb6.cantidadNodos() = 25)
   );
 
 -- ============================================================
@@ -416,11 +493,15 @@ operations
   public T9_finalizarConGente: () ==> ()
   T9_finalizarConGente() ==
   (
-    dcl pb  : PabellonUNSA := new PabellonUNSA();
+    dcl pb           : PabellonUNSA                := new PabellonUNSA();
+    dcl pl           : Planificador;
+    dcl se           : SistemaEvacuacion;
+    dcl aulasPendFin : set of Tipos`NodoId;
+
     pb.inicializar();
-    dcl pl  : Planificador := new Planificador(pb);
-    dcl se  : SistemaEvacuacion :=
-          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
 
     se.activarAlerta();
     se.asignarRutas();
@@ -433,12 +514,15 @@ operations
 
     -- Verificar directamente que la precondición ES FALSA:
     -- (es decir, que hay aulas con gente que no están evacuadas)
-    dcl aulasPendFin : set of Tipos`NodoId :=
+    aulasPendFin :=
           {a | a in set pb.getAulas() &
                se.getEstadoAula(a) <> <EVACUADA> and
                se.getOcupacion(a) > 0};
 
     asegurar(aulasPendFin <> {});
+
+    -- Nadie ha sido evacuado todavía
+    asegurar(se.getAulasEvacuadas() = {});
 
     -- La seguridad I5 garantiza que finalizarEvacuacion
     -- con esta precondición no puede completarse:
@@ -452,11 +536,14 @@ operations
   public T9_forzarViolacion: () ==> ()
   T9_forzarViolacion() ==
   (
-    dcl pb  : PabellonUNSA := new PabellonUNSA();
+    dcl pb : PabellonUNSA    := new PabellonUNSA();
+    dcl pl : Planificador;
+    dcl se : SistemaEvacuacion;
+
     pb.inicializar();
-    dcl pl  : Planificador := new Planificador(pb);
-    dcl se  : SistemaEvacuacion :=
-          new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
 
     se.activarAlerta();
     se.asignarRutas();

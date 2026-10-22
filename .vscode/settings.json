@@ -1,0 +1,24 @@
+{
+    // ---------------------------------------------------------------------
+    // Ajustes del proyecto VERA para la extension VDM de VS Code
+    // (overturetool.vdm-vscode)
+    // ---------------------------------------------------------------------
+
+    // Release de VDMJ con la que se valido el modelo. Fijarlo aqui evita
+    // que un cambio de release en el equipo altere el analisis del modelo.
+    "vdm-vscode.server.release": "vdm10",
+
+    // Muestra los "code lens" (enlaces Run interpreter / POG) encima de
+    // cada operacion y funcion definida.
+    "vdm-vscode.codeLenses.enabled": true,
+
+    // Resalta los puntos donde la especificacion se apoya en reglas de
+    // parseo permisivas (util para la revision del modelo).
+    "vdm-vscode.server.strict": false,
+
+    // Los ficheros VDM++ se abren con la extension de forma automatica;
+    // esta asociacion es solo una red de seguridad.
+    "files.associations": {
+        "*.vdmpp": "vdmpp"
+    }
+}

@@ -1,0 +1,107 @@
+{
+    "configurations": [
+        {
+            "name": "VERA · Compilar modelo",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "command": "print true"
+        },
+        {
+            "name": "VERA · T1 Evacuación normal",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Test",
+            "command": "print new Test().T1_evacuacionNormal()"
+        },
+        {
+            "name": "VERA · T2 Bloqueo de escalera",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Test",
+            "command": "print new Test().T2_bloqueoEscalera()"
+        },
+        {
+            "name": "VERA · T3 Dos bloqueos simultáneos",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Test",
+            "command": "print new Test().T3_dosBloqueos()"
+        },
+        {
+            "name": "VERA · T4 Ocupación = capacidad exacta",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Test",
+            "command": "print new Test().T4_capacidadExacta()"
+        },
+        {
+            "name": "VERA · T5 Ruta alternativa",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Test",
+            "command": "print new Test().T5_rutaAlternativa()"
+        },
+        {
+            "name": "VERA · T6 Todas las salidas bloqueadas",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Test",
+            "command": "print new Test().T6_todasSalidasBloqueadas()"
+        },
+        {
+            "name": "VERA · T7 Bloqueo sin impacto",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Test",
+            "command": "print new Test().T7_bloqueoSinImpacto()"
+        },
+        {
+            "name": "VERA · T8 Escalabilidad",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Test",
+            "command": "print new Test().T8_escalabilidad()"
+        },
+        {
+            "name": "VERA · T9 Finalizar con gente adentro",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Test",
+            "command": "print new Test().T9_finalizarConGente()"
+        },
+        {
+            "name": "VERA · Demo plan de evacuación",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Demo",
+            "command": "print new Demo().demoNormal()"
+        },
+        {
+            "name": "VERA · Demo bloqueo de escalera",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Demo",
+            "command": "print new Demo().demoBloqueo()"
+        },
+        {
+            "name": "VERA · Demo tabla de capacidades A.130",
+            "type": "vdm",
+            "request": "launch",
+            "noDebug": true,
+            "defaultName": "Demo",
+            "command": "print new Demo().demoCapacidad()"
+        }
+    ]
+}

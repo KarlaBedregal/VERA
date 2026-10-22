@@ -31,6 +31,15 @@
 --   "Capacity Constrained Routing Algorithms for Evacuation
 --    Planning", SSTD 2005, doi:10.1007/11535331_17.
 --
+-- Nota de sintaxis VDM++ (verificada con VDMJ 4.7.0):
+--   · El cuerpo de una operación con varias sentencias debe
+--     ir entre paréntesis:  op(...) == ( stmt1; stmt2 )
+--   · Las declaraciones locales (`dcl`) deben ser las
+--     primeras sentencias de un bloque.
+--   · Los tipos producto (A * B) no se pueden escribir en un
+--     `dcl`: hay que usar un sinónimo de tipo (Tipos`ParRuta).
+--   · La proyección de tuplas se escribe t.#1, t.#2 (no #1(t)).
+--
 -- Responsable: C5   Revisor: C2
 -- VERA · UNSA 2026-B
 -- ============================================================
@@ -62,7 +71,7 @@ operations
     pabellon := p;
     carga    := {tid |-> 0 | tid in set dom p.getTramos()}
   )
-  post dom carga = dom p.getTramos() and
+  post dom carga = dom p.tramos and
        forall tid in set dom carga & carga(tid) = 0;
 
 -- ============================================================
@@ -85,45 +94,46 @@ operations
   -- ----------------------------------------------------------
   public buscarRuta: Tipos`NodoId * nat ==> [Tipos`Ruta]
   buscarRuta(origen, personas) ==
-    dcl cola      : seq of (Tipos`NodoId * Tipos`Ruta)
-                    := [mk_(origen, [origen])];
-    dcl visitados : set of Tipos`NodoId := {origen};
-    dcl resultado : [Tipos`Ruta]        := nil;
+  (
+    dcl cola      : seq of Tipos`ParRuta   := [mk_(origen, [origen])];
+    dcl visitados : set of Tipos`NodoId    := {origen};
+    dcl resultado : [Tipos`Ruta]           := nil;
+
+    while cola <> [] and resultado = nil do
     (
-      while cola <> [] and resultado = nil do
-      (
-        dcl par    : Tipos`NodoId * Tipos`Ruta := hd cola;
-        dcl nodo   : Tipos`NodoId              := #1(par);
-        dcl camino : Tipos`Ruta                := #2(par);
-        cola := tl cola;
+      dcl par    : Tipos`ParRuta := hd cola;
+      dcl nodo   : Tipos`NodoId  := par.#1;
+      dcl camino : Tipos`Ruta    := par.#2;
+      cola := tl cola;
 
-        -- Si llegamos a una salida, esta ruta es la solución
-        if nodo in set pabellon.getSalidas()
-        then resultado := camino
-        else
-          -- Expandir vecinos habilitados con capacidad suficiente
-          for all t in set pabellon.getTramosDesde(nodo) do
+      -- Si llegamos a una salida, esta ruta es la solución
+      if nodo in set pabellon.getSalidas()
+      then resultado := camino
+      else
+        -- Expandir vecinos habilitados con capacidad suficiente
+        for all t in set pabellon.getTramosDesde(nodo) do
+        (
+          dcl cargaActual : nat :=
+            if t.id in set dom carga then carga(t.id) else 0;
+
+          if t.estado = <HABILITADO>
+             and Tipos`capacidadResidual(t, cargaActual) >= personas
+             and t.destino not in set visitados
+          then
           (
-            dcl cargaActual : nat :=
-              if t.id in set dom carga then carga(t.id) else 0;
-
-            if t.estado = <HABILITADO>
-               and Tipos`capacidadResidual(t, cargaActual) >= personas
-               and t.destino not in set visitados
-            then
-            (
-              visitados := visitados union {t.destino};
-              cola      := cola ^ [mk_(t.destino, camino ^ [t.destino])]
-            )
+            visitados := visitados union {t.destino};
+            cola      := cola ^ [mk_(t.destino, camino ^ [t.destino])]
           )
-      );
-      return resultado
-    )
-  pre  origen in set dom pabellon.getNodos()
+        )
+    );
+
+    return resultado
+  )
+  pre  origen in set dom pabellon.nodos
   post RESULT <> nil =>
          esRutaValida(RESULT,
-                      pabellon.getTramos(),
-                      pabellon.getSalidas(),
+                      pabellon.tramos,
+                      Tipos`salidasDe(pabellon.nodos),
                       carga,
                       personas);
 
@@ -150,45 +160,47 @@ operations
   public asignarTodas: map Tipos`NodoId to nat ==>
                        map Tipos`NodoId to [Tipos`Ruta]
   asignarTodas(ocupacion) ==
-    dcl pendientes : set of Tipos`NodoId           := dom ocupacion;
-    dcl asignacion : map Tipos`NodoId to [Tipos`Ruta] := {|->};
+  (
+    dcl pendientes  : set of Tipos`NodoId              := dom ocupacion;
+    dcl asignacion : map Tipos`NodoId to [Tipos`Ruta]  := {|->};
+
+    while pendientes <> {} do
     (
-      while pendientes <> {} do
-      (
-        -- Seleccionar aula de mayor prioridad:
-        -- ninguna otra en pendientes tiene piso más alto,
-        -- ni igual piso con mayor ocupación.
-        dcl nm : map Tipos`NodoId to Tipos`Nodo := pabellon.getNodos();
-        dcl siguiente : Tipos`NodoId :=
-              let a in set pendientes be st
-                not exists b in set pendientes &
-                  nm(b).piso > nm(a).piso or
-                  (nm(b).piso = nm(a).piso and
-                   ocupacion(b) > ocupacion(a))
-              in a;
+      -- Seleccionar aula de mayor prioridad:
+      -- ninguna otra en pendientes tiene piso más alto,
+      -- ni igual piso con mayor ocupación.
+      dcl nm        : map Tipos`NodoId to Tipos`Nodo := pabellon.getNodos();
+      dcl siguiente : Tipos`NodoId :=
+            let a in set pendientes be st
+              not (exists b in set pendientes &
+                (nm(b).piso > nm(a).piso or
+                 (nm(b).piso = nm(a).piso and
+                  ocupacion(b) > ocupacion(a))))
+            in a;
+      dcl ruta : [Tipos`Ruta] := nil;
 
-        -- Buscar ruta solo si el aula tiene ocupantes
-        dcl ruta : [Tipos`Ruta] := nil;
-        if ocupacion(siguiente) > 0
-        then ruta := buscarRuta(siguiente, ocupacion(siguiente));
+      -- Buscar ruta solo si el aula tiene ocupantes
+      if ocupacion(siguiente) > 0
+      then ruta := buscarRuta(siguiente, ocupacion(siguiente));
 
-        -- Registrar asignación (nil si no hay ruta factible)
-        asignacion := asignacion ++ {siguiente |-> ruta};
+      -- Registrar asignación (nil si no hay ruta factible)
+      asignacion := asignacion ++ {siguiente |-> ruta};
 
-        -- Reservar capacidad en los tramos de la ruta asignada
-        if ruta <> nil
-        then reservarCapacidad(ruta, ocupacion(siguiente));
+      -- Reservar capacidad en los tramos de la ruta asignada
+      if ruta <> nil
+      then reservarCapacidad(ruta, ocupacion(siguiente));
 
-        pendientes := pendientes \ {siguiente}
-      );
-      return asignacion
-    )
-  pre  forall a in set dom ocupacion & a in set pabellon.getAulas()
+      pendientes := pendientes \ {siguiente}
+    );
+
+    return asignacion
+  )
+  pre  forall a in set dom ocupacion & a in set Tipos`aulasDe(pabellon.nodos)
   post forall a in set dom RESULT &
          RESULT(a) <> nil =>
            esRutaValida(RESULT(a),
-                        pabellon.getTramos(),
-                        pabellon.getSalidas(),
+                        pabellon.tramos,
+                        Tipos`salidasDe(pabellon.nodos),
                         carga,
                         0);
 
@@ -203,19 +215,23 @@ operations
   -- ----------------------------------------------------------
   private reservarCapacidad: Tipos`Ruta * nat ==> ()
   reservarCapacidad(ruta, personas) ==
+  (
     for i = 1 to len ruta - 1 do
     (
       dcl t : [Tipos`Tramo] := pabellon.getTramoEntre(ruta(i), ruta(i+1));
+
       if t <> nil
       then
       (
         dcl tid : Tipos`TramoId := t.id;
+
         if tid in set dom carga
         then carga := carga ++ {tid |-> carga(tid) + personas}
         else carga := carga ++ {tid |-> personas}
       )
     )
-  pre len ruta >= 2;
+  )
+  pre len ruta >= 1;
 
   -- ----------------------------------------------------------
   -- liberarCapacidad: resta `personas` de la carga de cada
@@ -224,20 +240,24 @@ operations
   -- ----------------------------------------------------------
   public liberarCapacidad: Tipos`Ruta * nat ==> ()
   liberarCapacidad(ruta, personas) ==
+  (
     for i = 1 to len ruta - 1 do
     (
       dcl t : [Tipos`Tramo] := pabellon.getTramoEntre(ruta(i), ruta(i+1));
+
       if t <> nil
       then
       (
         dcl tid : Tipos`TramoId := t.id;
+
         if tid in set dom carga and carga(tid) >= personas
         then carga := carga ++ {tid |-> carga(tid) - personas}
         else if tid in set dom carga
              then carga := carga ++ {tid |-> 0}
       )
     )
-  pre len ruta >= 2;
+  )
+  pre len ruta >= 1;
 
   -- ----------------------------------------------------------
   -- reasignarRuta: recalcula la ruta de un aula específica.
@@ -247,12 +267,13 @@ operations
   public reasignarRuta: Tipos`NodoId * [Tipos`Ruta] * nat ==> [Tipos`Ruta]
   reasignarRuta(aula, rutaAnterior, personas) ==
   (
+    dcl nuevaRuta : [Tipos`Ruta] := nil;
+
     -- Liberar carga de la ruta anterior
     if rutaAnterior <> nil
     then liberarCapacidad(rutaAnterior, personas);
 
     -- Buscar nueva ruta
-    dcl nuevaRuta : [Tipos`Ruta] := nil;
     if personas > 0
     then nuevaRuta := buscarRuta(aula, personas);
 
@@ -262,13 +283,16 @@ operations
 
     return nuevaRuta
   )
-  pre aula in set dom pabellon.getNodos();
+  pre aula in set dom pabellon.nodos;
 
 -- ============================================================
--- CONSULTORES
+-- CONSULTORES (operaciones de solo lectura)
 -- ============================================================
+operations
 
-  -- Devuelve el mapa de carga actual
+  -- ----------------------------------------------------------
+  -- getCarga: mapa de carga actual por tramo.
+  -- ----------------------------------------------------------
   public getCarga: () ==> map Tipos`TramoId to nat
   getCarga() == return carga;
 
@@ -280,13 +304,13 @@ operations
   -- Devuelve la capacidad residual de un tramo
   public getCapacidadResidual: Tipos`TramoId ==> nat
   getCapacidadResidual(tid) ==
-    if tid in set dom pabellon.getTramos()
-    then
-      let t = pabellon.getTramos()(tid) in
-      let c = if tid in set dom carga then carga(tid) else 0 in
-        return Tipos`capacidadResidual(t, c)
-    else return 0
-  pre tid in set dom pabellon.getTramos();
+  (
+    dcl t : Tipos`Tramo := pabellon.getTramos()(tid);
+    dcl c : nat := if tid in set dom carga then carga(tid) else 0;
+
+    return Tipos`capacidadResidual(t, c)
+  )
+  pre tid in set dom pabellon.tramos;
 
   -- Reinicia toda la carga a 0 (para pruebas)
   public reiniciarCarga: () ==> ()
@@ -310,12 +334,17 @@ functions
   --
   -- Esta función es la especificación formal de seguridad:
   -- el sistema GARANTIZA que solo asigna rutas que la cumplen.
+  --
+  -- Nota: con `personas` = 0 el predicado se reduce a
+  -- "ningún tramo de la ruta supera su capacidad A.130", que es
+  -- exactamente el invariante I2 aplicado a las rutas asignadas.
   -- ----------------------------------------------------------
   public esRutaValida: Tipos`Ruta * map Tipos`TramoId to Tipos`Tramo *
                        set of Tipos`NodoId * map Tipos`TramoId to nat *
                        nat -> bool
   esRutaValida(ruta, tramos, salidas, cargaMap, personas) ==
     -- (a) termina en una salida
+    len ruta >= 1 and
     ruta(len ruta) in set salidas
     and
     -- (b) y (c): cada tramo consecutivo existe, está habilitado
@@ -327,8 +356,8 @@ functions
         tramos(tid).estado  = <HABILITADO> and
         (let cargaActual = if tid in set dom cargaMap
                            then cargaMap(tid) else 0 in
-           cargaActual + personas <= Tipos`capacidad(tramos(tid)))
-  pre len ruta >= 2;
+         cargaActual + personas <= Tipos`capacidad(tramos(tid)))
+  pre len ruta >= 1;
 
   -- ----------------------------------------------------------
   -- rutaUsaTramo: verdadero si la ruta pasa por el tramo `tid`.
@@ -342,6 +371,6 @@ functions
     exists i in set {1, ..., len ruta - 1} &
       tramos(tid).origen  = ruta(i) and
       tramos(tid).destino = ruta(i + 1)
-  pre len ruta >= 2;
+  pre len ruta >= 1;
 
 end Planificador

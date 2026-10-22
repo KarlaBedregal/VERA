@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
+<!--
+  ============================================================================
+   VERA - Modelo UPPAAL del sistema de evacuacion sismica con rutas adaptativas
+   ============================================================================
+
+   Parte 2 del proyecto VERA (verificacion por model checking).
+   Correspondencia con el modelo VDM++ de la Parte 1:
+
+     VDM++                          UPPAAL
+     ==================================================================
+     Tipos`EstadoSist               Sistema.Inactivo / Alerta / Asignando /
+                                    Evacuando / Reasignando / Finalizado
+     Tipos`EstadoAula               Aula.Pendiente / ConRuta / EnTransito /
+                                    Evacuada / SinRuta
+     Tipos`capacidad (A.130)        CAP_ESCALERA, CAP_SALIDA
+     Planificador.carga             cargaEscalera, cargaSalida
+     Pabellon.bloquearTramo         Entorno (bloqueo no determinista)
+     SistemaEvacuacion.bloquearTramo Sistema.Evacuando -> Reasignando
+
+   Supuestos y alcance (ver PLANIFICACION.md):
+     · Se modela UNA escalera critica y la puerta de salida, que es donde la
+       Norma A.130 puede ser binding. El resto de los tramos del pavilion
+       se considera siempre transitable.
+     · No se modela tiempo continuo: la capacidad se modela como el numero
+       maximo de personas que pueden asignarse a un tramo durante toda la
+       evacuacion (mismo supuesto que en la Parte 1).
+     · El Entorno puede bloquear la escalera en cualquier momento de la
+       evacuacion y despues liberarla; esa segunda transicion es la que
+       garantiza que el modelo nunca se trabe (propiedad P1).
+
+   Parametros (Norma A.130 del RNE):
+     escalera 1.20 m -> floor(1.20 / 0.008) = 150 personas
+     puerta    1.00 m -> floor(1.00 / 0.005) = 200 personas
+   ============================================================================
+-->
+<nta>
+	<declaration>// ------------------------------------------------------------------
+// VERA - Declaraciones globales
+// ------------------------------------------------------------------
+
+// --- Parametros dimensionales (Norma A.130 del RNE) -------------------------
+const int CAP_ESCALERA = 150;   // escalera 1.20 m : floor(1.20 / 0.008)
+const int CAP_SALIDA   = 200;   // puerta    1.00 m : floor(1.00 / 0.005)
+const int OCUP_AULA    = 60;    // personas por aula del pavillon de referencia
+const int N_AULAS      = 4;     // aulas modeladas
+
+// --- Estado global ----------------------------------------------------------
+int cargaEscalera   = 0;       // personas asignadas a la escalera critica
+int cargaSalida     = 0;       // personas asignadas a la puerta de salida
+int aulasPendientes = N_AULAS; // aulas que aun no completaron su evacuacion
+int aulasResueltas  = 0;       // aulas con ruta asignada (o declaradas SIN_RUTA)
+bool escaleraBloqueada = false;// el Entorno bloquea la escalera critica
+
+// --- Canales ----------------------------------------------------------------
+chan sismo;    // aviso de alerta sismica     (Entorno  -> Sistema)
+chan bloqueo;  // aviso de bloqueo de tramo   (Entorno  -> Sistema)</declaration>
+
+	<!-- ==================================================================
+	     Aula: una instancia por aula del pavilion.
+	     Transiciones:
+	       Pendiente -> ConRuta    : se le asigna una ruta (escalera o salida)
+	       ConRuta   -> EnTransito : entra al tramo (consume capacidad A.130)
+	       EnTransito-> EnTransito : reasignacion al bloquearse su tramo
+	       EnTransito-> Evacuada   : sale del edificio
+	       Pendiente -> SinRuta    : no existe ruta factible
+	       SinRuta   -> ConRuta    : reintento cuando el entorno cambia
+	     ================================================================== -->
+	<template>
+		<name x="16" y="-8">Aula</name>
+		<declaration>// Tramo usado por la ruta de esta aula:
+// 0 = sin ruta, 1 = escalera critica, 2 = puerta de salida
+int tramo = 0;</declaration>
+		<location id="a0" x="120" y="40">
+			<name x="80" y="24">Pendiente</name>
+		</location>
+		<location id="a1" x="320" y="40">
+			<name x="280" y="24">ConRuta</name>
+		</location>
+		<location id="a2" x="520" y="40">
+			<name x="470" y="24">EnTransito</name>
+		</location>
+		<location id="a3" x="720" y="40">
+			<name x="690" y="24">Evacuada</name>
+		</location>
+		<location id="a4" x="320" y="160">
+			<name x="290" y="144">SinRuta</name>
+		</location>
+		<init ref="a0"/>
+		<transition>
+			<source ref="a0"/>
+			<target ref="a1"/>
+			<label kind="guard" x="160" y="8">!escaleraBloqueada</label>
+			<label kind="assignment" x="160" y="28">tramo = 1;
+aulasResueltas = aulasResueltas + 1;</label>
+		</transition>
+		<transition>
+			<source ref="a0"/>
+			<target ref="a1"/>
+			<label kind="guard" x="160" y="72">escaleraBloqueada</label>
+			<label kind="assignment" x="160" y="92">tramo = 2;
+aulasResueltas = aulasResueltas + 1;</label>
+		</transition>
+		<transition>
+			<source ref="a0"/>
+			<target ref="a4"/>
+			<label kind="guard" x="180" y="136">escaleraBloqueada &amp;&amp;
+cargaSalida + OCUP_AULA &gt; CAP_SALIDA</label>
+			<label kind="assignment" x="180" y="156">aulasResueltas = aulasResueltas + 1;</label>
+		</transition>
+		<transition>
+			<source ref="a1"/>
+			<target ref="a2"/>
+			<label kind="guard" x="360" y="8">tramo == 1 &amp;&amp; !escaleraBloqueada &amp;&amp;
+cargaEscalera + OCUP_AULA &lt;= CAP_ESCALERA</label>
+			<label kind="assignment" x="360" y="28">cargaEscalera = cargaEscalera + OCUP_AULA;</label>
+		</transition>
+		<transition>
+			<source ref="a1"/>
+			<target ref="a2"/>
+			<label kind="guard" x="360" y="72">tramo == 2 &amp;&amp;
+cargaSalida + OCUP_AULA &lt;= CAP_SALIDA</label>
+			<label kind="assignment" x="360" y="92">cargaSalida = cargaSalida + OCUP_AULA;</label>
+		</transition>
+		<transition>
+			<source ref="a2"/>
+			<target ref="a2"/>
+			<label kind="guard" x="560" y="8">tramo == 1 &amp;&amp; escaleraBloqueada &amp;&amp;
+cargaSalida + OCUP_AULA &lt;= CAP_SALIDA</label>
+			<label kind="assignment" x="560" y="28">cargaEscalera = cargaEscalera - OCUP_AULA;
+cargaSalida = cargaSalida + OCUP_AULA;
+tramo = 2;</label>
+		</transition>
+		<transition>
+			<source ref="a2"/>
+			<target ref="a3"/>
+			<label kind="guard" x="600" y="72">tramo == 1</label>
+			<label kind="assignment" x="600" y="92">cargaEscalera = cargaEscalera - OCUP_AULA;
+aulasPendientes = aulasPendientes - 1;</label>
+		</transition>
+		<transition>
+			<source ref="a2"/>
+			<target ref="a3"/>
+			<label kind="guard" x="600" y="136">tramo == 2</label>
+			<label kind="assignment" x="600" y="156">cargaSalida = cargaSalida - OCUP_AULA;
+aulasPendientes = aulasPendientes - 1;</label>
+		</transition>
+		<transition>
+			<source ref="a4"/>
+			<target ref="a1"/>
+			<label kind="guard" x="380" y="144">!escaleraBloqueada</label>
+			<label kind="assignment" x="380" y="164">tramo = 1;</label>
+		</transition>
+		<transition>
+			<source ref="a4"/>
+			<target ref="a1"/>
+			<label kind="guard" x="380" y="200">escaleraBloqueada</label>
+			<label kind="assignment" x="380" y="220">tramo = 2;</label>
+		</transition>
+	</template>
+
+	<!-- ==================================================================
+	     Sistema: maquina de estados de la evacuacion.
+	       Inactivo  =>  (sismo?)  =>  Alerta  =>  Asignando  =>  Evacuando
+	       Evacuando =>  (bloqueo?)  =>  Reasignando  =>  Evacuando
+	       Evacuando/Reasignando  =>  Finalizado (si no queda nadie dentro)
+	     ================================================================== -->
+	<template>
+		<name x="16" y="-8">Sistema</name>
+		<location id="s0" x="80" y="40">
+			<name x="40" y="24">Inactivo</name>
+		</location>
+		<location id="s1" x="240" y="40">
+			<name x="200" y="24">Alerta</name>
+		</location>
+		<location id="s2" x="400" y="40">
+			<name x="360" y="24">Asignando</name>
+		</location>
+		<location id="s3" x="560" y="40">
+			<name x="530" y="24">Evacuando</name>
+		</location>
+		<location id="s4" x="560" y="160">
+			<name x="530" y="144">Reasignando</name>
+		</location>
+		<location id="s5" x="720" y="40">
+			<name x="680" y="24">Finalizado</name>
+		</location>
+		<init ref="s0"/>
+		<transition>
+			<source ref="s0"/>
+			<target ref="s1"/>
+			<label kind="synchronisation" x="140" y="24">sismo?</label>
+		</transition>
+		<transition>
+			<source ref="s1"/>
+			<target ref="s2"/>
+		</transition>
+		<transition>
+			<source ref="s2"/>
+			<target ref="s3"/>
+			<label kind="guard" x="460" y="8">aulasResueltas == N_AULAS</label>
+		</transition>
+		<transition>
+			<source ref="s3"/>
+			<target ref="s4"/>
+			<label kind="synchronisation" x="620" y="88">bloqueo?</label>
+		</transition>
+		<transition>
+			<source ref="s4"/>
+			<target ref="s3"/>
+			<label kind="guard" x="620" y="136">!(escaleraBloqueada &amp;&amp;
+(A1.tramo == 1 || A2.tramo == 1 ||
+ A3.tramo == 1 || A4.tramo == 1))</label>
+		</transition>
+		<transition>
+			<source ref="s3"/>
+			<target ref="s5"/>
+			<label kind="guard" x="640" y="8">aulasPendientes == 0</label>
+		</transition>
+		<transition>
+			<source ref="s4"/>
+			<target ref="s5"/>
+			<label kind="guard" x="640" y="176">aulasPendientes == 0</label>
+		</transition>
+		<transition>
+			<source ref="s5"/>
+			<target ref="s5"/>
+			<label kind="assignment" x="800" y="56">// auto-transicion "idle":
+// el proceso ha terminado y no se bloquea</label>
+		</transition>
+	</template>
+
+	<!-- ==================================================================
+	     Entorno: blockage no determinista de un tramo del pavilion.
+	       Inicial => (sismo!) => Reposo => (bloqueo!) => Bloqueado => Reposo
+	     La transicion Bloqueado => Reposo (liberar el tramo) es la que
+	     garantiza que exista siempre alguna transicion habilitada.
+	     ================================================================== -->
+	<template>
+		<name x="16" y="-8">Entorno</name>
+		<location id="e0" x="80" y="40">
+			<name x="40" y="24">Inicial</name>
+		</location>
+		<location id="e1" x="240" y="40">
+			<name x="200" y="24">Reposo</name>
+		</location>
+		<location id="e2" x="400" y="40">
+			<name x="360" y="24">Bloqueado</name>
+		</location>
+		<init ref="e0"/>
+		<transition>
+			<source ref="e0"/>
+			<target ref="e1"/>
+			<label kind="synchronisation" x="140" y="24">sismo!</label>
+		</transition>
+		<transition>
+			<source ref="e1"/>
+			<target ref="e2"/>
+			<label kind="synchronisation" x="300" y="8">bloqueo!</label>
+			<label kind="assignment" x="300" y="28">escaleraBloqueada = true;</label>
+		</transition>
+		<transition>
+			<source ref="e2"/>
+			<target ref="e1"/>
+			<label kind="assignment" x="300" y="72">escaleraBloqueada = false;</label>
+		</transition>
+	</template>
+
+	<system>Aula A1, A2, A3, A4;
+Sistema Sistema;
+Entorno Entorno;
+
+system A1, A2, A3, A4, Sistema, Entorno;</system>
+</nta>

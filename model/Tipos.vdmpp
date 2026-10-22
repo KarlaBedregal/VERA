@@ -110,12 +110,37 @@ types
   -- Debe tener al menos 2 nodos (origen y destino).
   public Ruta = seq1 of NodoId;
 
+  -- ─── Par de la cola del BFS ───────────────────────────────
+  -- (nodo actual, camino recorrido hasta él).
+  -- Se declara como sinónimo de tipo porque VDM++ no permite
+  -- escribir tipos producto (A * B) dentro de una declaración
+  -- local `dcl`.
+  public ParRuta = NodoId * Ruta;
+
 -- ============================================================
 -- FUNCIONES AUXILIARES PURAS
 -- Sin efectos secundarios. Usadas en invariantes, pre/post
 -- condiciones y en la lógica del Planificador.
+--
+-- Nota: en VDM++ las funciones declaradas en la sección
+-- `functions` de una clase son ESTÁTICAS: no pueden leer las
+-- variables de instancia. Por eso los derivadores de subconjuntos
+-- (salidas, aulas) reciben el mapa de nodos como argumento, para
+-- poder usarse desde precondiciones y postcondiciones.
 -- ============================================================
 functions
+
+  -- ----------------------------------------------------------
+  -- salidasDe: IDs de los nodos de tipo SALIDA de un mapa de nodos.
+  -- ----------------------------------------------------------
+  public salidasDe: map Tipos`NodoId to Tipos`Nodo -> set of Tipos`NodoId
+  salidasDe(m) == {n.id | n in set rng m & n.tipo = <SALIDA>};
+
+  -- ----------------------------------------------------------
+  -- aulasDe: IDs de los nodos de tipo AULA de un mapa de nodos.
+  -- ----------------------------------------------------------
+  public aulasDe: map Tipos`NodoId to Tipos`Nodo -> set of Tipos`NodoId
+  aulasDe(m) == {n.id | n in set rng m & n.tipo = <AULA>};
 
   -- ----------------------------------------------------------
   -- capacidad: calcula la capacidad máxima de un tramo
@@ -210,9 +235,13 @@ functions
   -- longitudRuta: cantidad de tramos (saltos) de una ruta.
   -- El BFS minimiza este valor al buscar la ruta más corta.
   -- Una ruta de k nodos tiene k-1 tramos.
+  --
+  -- Nota: el resultado es `nat` (y no `nat1`) porque una ruta
+  -- puede tener un solo nodo (aula = salida) y entonces su
+  -- longitud es 0.
   -- ----------------------------------------------------------
-  public longitudRuta: Ruta -> nat1
+  public longitudRuta: Ruta -> nat
   longitudRuta(r) == len r - 1
-  pre len r >= 2;
+  pre len r >= 1;
 
 end Tipos

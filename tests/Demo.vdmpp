@@ -1,0 +1,192 @@
+-- ============================================================
+-- Demo.vdmpp
+-- Demostración imprimible del sistema VERA.
+--
+-- Esta clase no aporta nada al modelo formal: es un "caso de
+-- escritorio" que permite ver los resultados en pantalla (útil
+-- para el video del entregable y para depurar el modelo).
+--
+-- Usa la librería estándar IO (lib/IO.vdmpp).
+--
+-- Ejecución (línea de comandos):
+--   java … -vdmpp model tests lib -e "new Demo().demoNormal()"
+--
+-- Responsable: C4   Revisor: C5
+-- VERA · UNSA 2026-B
+-- ============================================================
+class Demo
+
+-- ============================================================
+-- TIPOS DE RESUMEN (solo para presentación)
+-- ============================================================
+types
+
+  -- Estado de una aula dentro del plan de evacuación
+  public ResumenAula :: aula      : Tipos`NodoId
+                      piso      : nat
+                      personas : nat
+                      estado    : Tipos`EstadoAula
+                      ruta      : [Tipos`Ruta];
+
+  -- Carga asignada a un tramo frente a su capacidad A.130
+  public ResumenTramo :: tramo     : Tipos`TramoId
+                       tipoTramo : Tipos`TipoTramo
+                       ancho     : real
+                       capacidad : nat
+                       carga     : nat;
+
+-- ============================================================
+-- OPERACIONES
+-- ============================================================
+operations
+
+  -- ----------------------------------------------------------
+  -- demoNormal: evacuación completa del pabellón de referencia.
+  -- Imprime el plan de rutas y la carga por tramo.
+  -- ----------------------------------------------------------
+  public demoNormal: () ==> ()
+  demoNormal() ==
+  (
+    dcl pb        : PabellonUNSA                := new PabellonUNSA();
+    dcl pl        : Planificador;
+    dcl se        : SistemaEvacuacion;
+    dcl resumen   : set of ResumenAula;
+    dcl cargas    : set of ResumenTramo;
+
+    pb.inicializar();
+
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+
+    IO`println("");
+    IO`println("=========================================================");
+    IO`println(" VERA - Evacuacion sismica del pabellon de referencia");
+    IO`println("=========================================================");
+    IO`println("--- 1. Se activa la alerta sismica ---");
+    se.activarAlerta();
+
+    IO`println("--- 2. Se asignan rutas (orden CCRP: piso mas alto) ---");
+    se.asignarRutas();
+
+    resumen := {mk_ResumenAula(a,
+                               pb.getNodos()(a).piso,
+                               se.getOcupacion(a),
+                               se.getEstadoAula(a),
+                               se.getAsignacion(a))
+                 | a in set dom se.getTodasAsignaciones()};
+
+    IO`println("");
+    IO`println("--- 3. Plan de evacuacion por aula ---");
+    IO`print(resumen);
+
+    cargas := {mk_ResumenTramo(tid,
+                               pb.getTramos()(tid).tipo,
+                               pb.getTramos()(tid).ancho,
+                               Tipos`capacidad(pb.getTramos()(tid)),
+                               pl.getCargaTramo(tid))
+               | tid in set dom pb.getTramos()};
+
+    IO`println("");
+    IO`println("--- 4. Carga asignada por tramo (Norma A.130) ---");
+    IO`print(cargas);
+
+    IO`println("");
+    IO`println("--- 5. Estado del sistema e invariantes ---");
+    IO`print(se.getEstado());
+    IO`println("");
+    IO`print(se.totalOcupantes());
+    IO`println("");
+    IO`print(se.verificarTodosInvariantes());
+    IO`println("");
+    IO`println("=========================================================")
+  );
+
+  -- ----------------------------------------------------------
+  -- demoBloqueo: evacuated y luego se bloquea una escalera.
+  -- Muestra la reasignación automática de rutas (I3).
+  -- ----------------------------------------------------------
+  public demoBloqueo: () ==> ()
+  demoBloqueo() ==
+  (
+    dcl pb      : PabellonUNSA := new PabellonUNSA();
+    dcl pl      : Planificador;
+    dcl se      : SistemaEvacuacion;
+    dcl resumen : set of ResumenAula;
+
+    pb.inicializar();
+
+    pl := new Planificador(pb);
+    se := new SistemaEvacuacion(pb, pl, pb.ocupacionEstandar());
+
+    se.activarAlerta();
+    se.asignarRutas();
+
+    IO`println("");
+    IO`println("=========================================================");
+    IO`println(" VERA - Bloqueo de la escalera A (tramo 2261)");
+    IO`println("=========================================================");
+
+    resumen := {mk_ResumenAula(a,
+                               pb.getNodos()(a).piso,
+                               se.getOcupacion(a),
+                               se.getEstadoAula(a),
+                               se.getAsignacion(a))
+                 | a in set dom se.getTodasAsignaciones()};
+
+    IO`println("");
+    IO`println("--- Plan ANTES del bloqueo ---");
+    IO`print(resumen);
+
+    IO`println("");
+    IO`println("--- Se bloquea el tramo 2261 (escalera A, piso 2 -> 1) ---");
+    se.bloquearTramo(2261);
+
+    resumen := {mk_ResumenAula(a,
+                               pb.getNodos()(a).piso,
+                               se.getOcupacion(a),
+                               se.getEstadoAula(a),
+                               se.getAsignacion(a))
+                 | a in set dom se.getTodasAsignaciones()};
+
+    IO`println("");
+    IO`println("--- Plan DESPUES del bloqueo (rutas reasignadas) ---");
+    IO`print(resumen);
+
+    IO`println("");
+    IO`print(se.getAulasSinRuta());
+    IO`println("");
+    IO`print(se.verificarTodosInvariantes());
+    IO`println("");
+    IO`println("=========================================================")
+  );
+
+  -- ----------------------------------------------------------
+  -- demoCapacidad: tabla de capacidades A.130 del pabellón.
+  -- ----------------------------------------------------------
+  public demoCapacidad: () ==> ()
+  demoCapacidad() ==
+  (
+    dcl pb     : PabellonUNSA := new PabellonUNSA();
+    dcl tabla  : set of ResumenTramo;
+
+    pb.inicializar();
+
+    tabla := {mk_ResumenTramo(tid,
+                              pb.getTramos()(tid).tipo,
+                              pb.getTramos()(tid).ancho,
+                              Tipos`capacidad(pb.getTramos()(tid)),
+                              0)
+              | tid in set dom pb.getTramos()};
+
+    IO`println("");
+    IO`println("=========================================================");
+    IO`println(" VERA - Capacidades segun la Norma A.130 (RNE)");
+    IO`println("=========================================================");
+    IO`print(tabla);
+    IO`println("");
+    IO`println("Regla: pasillo/puerta = floor(ancho/0.005);");
+    IO`println("       escalera       = floor(ancho/0.008)");
+    IO`println("=========================================================")
+  );
+
+end Demo

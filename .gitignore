@@ -2,8 +2,9 @@
 .generated/
 *.vdmj
 *.class
-.vscode/
+.vscode/*
 !.vscode/settings.json
+!.vscode/launch.json
 
 # UPPAAL
 *.xta

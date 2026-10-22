@@ -144,10 +144,10 @@ operations
     agregarTramo(mk_Tipos`Tramo(4092, 50, 92, <PUERTA>, 1.00, <HABILITADO>))
   )
   post -- Topología mínima: 21 nodos, 22 tramos, 2 salidas
-       cantidadNodos()    = 21 and
-       cantidadTramos()   = 22 and
-       cantidadSalidas()  = 2  and
-       cantidadBloqueados() = 0;
+       card dom nodos = 21 and
+       card dom tramos = 22 and
+       card Tipos`salidasDe(nodos) = 2 and
+       card {tid | tid in set dom tramos & tramos(tid).estado = <BLOQUEADO>} = 0;
 
 -- ============================================================
 -- CONSULTOR DE OCUPACIÓN ESTÁNDAR

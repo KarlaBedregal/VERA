@@ -142,9 +142,9 @@ operations
   )
   pre  nPisos >= 1
   post -- Hay exactamente 2 salidas
-       RESULT.cantidadSalidas() = 2 and
+       card Tipos`salidasDe(RESULT.nodos) = 2 and
        -- No hay tramos bloqueados inicialmente
-       RESULT.cantidadBloqueados() = 0;
+       card {tid | tid in set dom RESULT.tramos & RESULT.tramos(tid).estado = <BLOQUEADO>} = 0;
 
   -- ----------------------------------------------------------
   -- generarConOcupacion: genera el pabellón y devuelve también

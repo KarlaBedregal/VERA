@@ -1,4 +1,53 @@
 elemento_id,tipo,piso,descripcion,ancho_m,largo_m,capacidad_A130,notas
-# TODO (E3-07): completar con mediciones del jueves 15 oct
-# tipo: AULA | PASILLO | ESCALERA | PUERTA | SALIDA
-# capacidad_A130: floor(ancho/0.005) para pasillo/puerta, floor(ancho/0.008) para escalera
+# Dimensiones del PABELLON DE REFERENCIA del modelo VERA (model/PabellonUNSA.vdmpp).
+# Son valores de referencia calculados con los MINIMOS de la Norma A.130 del RNE,
+# NO mediciones reales del pabellon UNSA (tarea E3-07 sigue pendiente).
+#
+# capacidad_A130 = floor(ancho/0.005) para PASILLO y PUERTA
+#                = floor(ancho/0.008) para ESCALERA
+# ANCHO_MIN_PUERTA (A.130 art. 22) = 1.00 m
+#
+# tipo: AULA | PASO | DESCANSO | SALIDA
+91,SALIDA,0,Salida exterior A (puerta 1.00 m),1.00,2.00,200,capacity = floor(1.00/0.005)
+92,SALIDA,0,Salida exterior B (puerta 1.00 m),1.00,2.00,200,capacity = floor(1.00/0.005)
+1,AULA,0,Aula 0-01,1.00,8.00,,ocupacion 30 personas
+2,AULA,0,Aula 0-02,1.00,8.00,,ocupacion 30 personas
+3,AULA,0,Aula 0-03,1.00,8.00,,ocupacion 30 personas
+4,AULA,0,Aula 0-04,1.00,8.00,,ocupacion 30 personas
+50,PASO,0,Pasillo central planta baja,2.40,30.00,480,capacity = floor(2.40/0.005)
+101,AULA,1,Aula 1-01,1.00,8.00,,ocupacion 30 personas
+102,AULA,1,Aula 1-02,1.00,8.00,,ocupacion 30 personas
+103,AULA,1,Aula 1-03,1.00,8.00,,ocupacion 30 personas
+104,AULA,1,Aula 1-04,1.00,8.00,,ocupacion 30 personas
+150,PASO,1,Pasillo central piso 1,2.40,30.00,480,capacity = floor(2.40/0.005)
+161,DESCANSO,1,Descanso escalera A piso 1,1.20,2.40,150,capacity = floor(1.20/0.008)
+162,DESCANSO,1,Descanso escalera B piso 1,1.20,2.40,150,capacity = floor(1.20/0.008)
+201,AULA,2,Aula 2-01,1.00,8.00,,ocupacion 30 personas
+202,AULA,2,Aula 2-02,1.00,8.00,,ocupacion 30 personas
+203,AULA,2,Aula 2-03,1.00,8.00,,ocupacion 30 personas
+204,AULA,2,Aula 2-04,1.00,8.00,,ocupacion 30 personas
+250,PASO,2,Pasillo central piso 2,2.40,30.00,480,capacity = floor(2.40/0.005)
+261,DESCANSO,2,Descanso escalera A piso 2,1.20,2.40,150,capacity = floor(1.20/0.008)
+262,DESCANSO,2,Descanso escalera B piso 2,1.20,2.40,150,capacity = floor(1.20/0.008)
+3001,PUERTA,0,Puerta aula 0-01,1.00,0.90,200,tramo aula 1 -> pasillo 50
+3002,PUERTA,0,Puerta aula 0-02,1.00,0.90,200,tramo aula 2 -> pasillo 50
+3003,PUERTA,0,Puerta aula 0-03,1.00,0.90,200,tramo aula 3 -> pasillo 50
+3004,PUERTA,0,Puerta aula 0-04,1.00,0.90,200,tramo aula 4 -> pasillo 50
+3101,PUERTA,1,Puerta aula 1-01,1.00,0.90,200,tramo aula 101 -> pasillo 150
+3102,PUERTA,1,Puerta aula 1-02,1.00,0.90,200,tramo aula 102 -> pasillo 150
+3103,PUERTA,1,Puerta aula 1-03,1.00,0.90,200,tramo aula 103 -> pasillo 150
+3104,PUERTA,1,Puerta aula 1-04,1.00,0.90,200,tramo aula 104 -> pasillo 150
+3201,PUERTA,2,Puerta aula 2-01,1.00,0.90,200,tramo aula 201 -> pasillo 250
+3202,PUERTA,2,Puerta aula 2-02,1.00,0.90,200,tramo aula 202 -> pasillo 250
+3203,PUERTA,2,Puerta aula 2-03,1.00,0.90,200,tramo aula 203 -> pasillo 250
+3204,PUERTA,2,Puerta aula 2-04,1.00,0.90,200,tramo aula 204 -> pasillo 250
+4091,PUERTA,0,Puerta de salida A,1.00,0.90,200,tramo pasillo 50 -> salida 91
+4092,PUERTA,0,Puerta de salida B,1.00,0.90,200,tramo pasillo 50 -> salida 92
+1161,PASILLO,1,Pasillo piso 1 a descanso escalera A,2.40,4.00,480,tramo 150 -> 161
+1162,PASILLO,1,Pasillo piso 1 a descanso escalera B,2.40,4.00,480,tramo 150 -> 162
+1261,PASILLO,2,Pasillo piso 2 a descanso escalera A,2.40,4.00,480,tramo 250 -> 261
+1262,PASILLO,2,Pasillo piso 2 a descanso escalera B,2.40,4.00,480,tramo 250 -> 262
+2161,ESCALERA,1,Escalera A tramo piso 1 a planta baja,1.20,5.00,150,tramo 161 -> 50
+2162,ESCALERA,1,Escalera B tramo piso 1 a planta baja,1.20,5.00,150,tramo 162 -> 50
+2261,ESCALERA,2,Escalera A tramo piso 2 a piso 1,1.20,5.00,150,tramo 261 -> 161
+2262,ESCALERA,2,Escalera B tramo piso 2 a piso 1,1.20,5.00,150,tramo 262 -> 162
