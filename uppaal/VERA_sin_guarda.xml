@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_1.dtd'>
+<nta>
+	<declaration>
+// ============================================================
+// VERA - Modelo UPPAAL CON ERROR INYECTADO (Entregable 4)
+//
+// Variante del modelo VERA.xml en la que se ELIMINA la guarda
+// de capacidad de la escalera en la plantilla Aula:
+//
+//   Original : evacuando &amp;&amp; !esc_bloqueada &amp;&amp; carga_esc + OCUP &lt;= CAP_ESC
+//   Con error: evacuando &amp;&amp; !esc_bloqueada
+//
+// Esto corresponde a eliminar la clausula de capacidad residual
+// de la funcion esRutaValida en VDM++. Se espera que la consulta
+// P1 (aforo) FALLE y que UPPAAL devuelva una traza contraejemplo
+// en la que ambas aulas descienden a la vez: carga_esc = 160 &gt; 150.
+// ============================================================
+
+const int N_AULAS = 2;
+const int OCUP    = 80;
+const int CAP_ESC = 150;
+const int CAP_SAL = 200;
+
+int carga_esc = 0;
+int carga_sal = 0;
+int evacuadas = 0;
+int sin_ruta  = 0;
+
+bool evacuando     = false;
+bool esc_bloqueada = false;
+
+broadcast chan alerta;
+	</declaration>
+
+	<template>
+		<name x="0" y="0">Sistema</name>
+		<location id="id0" x="-400" y="0">
+			<name x="-440" y="-30">INACTIVO</name>
+		</location>
+		<location id="id1" x="-200" y="0">
+			<name x="-220" y="-30">ALERTA</name>
+		</location>
+		<location id="id2" x="0" y="0">
+			<name x="-20" y="-30">EVACUANDO</name>
+		</location>
+		<location id="id3" x="250" y="-80">
+			<name x="230" y="-110">FINALIZADO</name>
+		</location>
+		<location id="id4" x="250" y="80">
+			<name x="230" y="100">FINALIZADO_PARCIAL</name>
+		</location>
+		<init ref="id0"/>
+		<transition>
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="-360" y="-30">alerta?</label>
+		</transition>
+		<transition>
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="assignment" x="-160" y="-30">evacuando = true</label>
+		</transition>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="guard" x="40" y="-80">evacuadas == N_AULAS</label>
+		</transition>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id4"/>
+			<label kind="guard" x="40" y="60">evacuadas + sin_ruta == N_AULAS &amp;&amp; sin_ruta &gt; 0</label>
+		</transition>
+	</template>
+
+	<template>
+		<name x="0" y="0">Entorno</name>
+		<location id="id5" x="-400" y="0">
+			<name x="-420" y="-30">Inicio</name>
+		</location>
+		<location id="id6" x="-200" y="0">
+			<name x="-230" y="-30">Decidido</name>
+		</location>
+		<location id="id7" x="0" y="0">
+			<name x="-40" y="-30">AlertaEnviada</name>
+		</location>
+		<init ref="id5"/>
+		<transition>
+			<source ref="id5"/>
+			<target ref="id6"/>
+		</transition>
+		<transition>
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="assignment" x="-360" y="20">esc_bloqueada = true</label>
+		</transition>
+		<transition>
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="synchronisation" x="-160" y="-30">alerta!</label>
+		</transition>
+	</template>
+
+	<template>
+		<name x="0" y="0">Aula</name>
+		<parameter>const int id</parameter>
+		<location id="id8" x="-400" y="0">
+			<name x="-430" y="-30">Pendiente</name>
+		</location>
+		<location id="id9" x="-150" y="-80">
+			<name x="-180" y="-110">EnEscalera</name>
+		</location>
+		<location id="id10" x="100" y="-80">
+			<name x="80" y="-110">Saliendo</name>
+		</location>
+		<location id="id11" x="350" y="-80">
+			<name x="330" y="-110">Evacuada</name>
+		</location>
+		<location id="id12" x="-150" y="100">
+			<name x="-180" y="120">SinRuta</name>
+		</location>
+		<init ref="id8"/>
+		<transition>
+			<source ref="id8"/>
+			<target ref="id12"/>
+			<label kind="guard" x="-390" y="40">evacuando &amp;&amp; esc_bloqueada</label>
+			<label kind="assignment" x="-390" y="60">sin_ruta++</label>
+		</transition>
+		<!-- GUARDA DE CAPACIDAD ELIMINADA: ya no se verifica carga_esc + OCUP &lt;= CAP_ESC -->
+		<transition>
+			<source ref="id8"/>
+			<target ref="id9"/>
+			<label kind="guard" x="-390" y="-90">evacuando &amp;&amp; !esc_bloqueada</label>
+			<label kind="assignment" x="-390" y="-70">carga_esc += OCUP</label>
+		</transition>
+		<transition>
+			<source ref="id9"/>
+			<target ref="id10"/>
+			<label kind="guard" x="-130" y="-110">carga_sal + OCUP &lt;= CAP_SAL</label>
+			<label kind="assignment" x="-130" y="-60">carga_esc -= OCUP,
+carga_sal += OCUP</label>
+		</transition>
+		<transition>
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="assignment" x="120" y="-60">carga_sal -= OCUP,
+evacuadas++</label>
+		</transition>
+	</template>
+
+	<system>
+sistema = Sistema();
+entorno = Entorno();
+A1 = Aula(1);
+A2 = Aula(2);
+
+system sistema, entorno, A1, A2;
+	</system>
+
+	<queries>
+		<query>
+			<formula>A[] carga_esc &lt;= CAP_ESC &amp;&amp; carga_sal &lt;= CAP_SAL</formula>
+			<comment>P1 con error: DEBE FALLAR. UPPAAL devuelve una traza en la que ambas aulas descienden simultaneamente y carga_esc = 160 &gt; CAP_ESC = 150.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; carga_esc &gt; CAP_ESC</formula>
+			<comment>Testigo del error: existe un estado alcanzable donde la carga de la escalera supera su capacidad. DEBE cumplirse (confirma la violacion de P1).</comment>
+		</query>
+	</queries>
+</nta>
