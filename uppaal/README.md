@@ -98,6 +98,29 @@ formaliza como **ausencia de interbloqueo prematuro**: todo estado sin salida es
 necesariamente un estado final correcto del sistema. Esto es más riguroso que
 `A[] not deadlock` y refleja la intención real de la propiedad.
 
+## Abstracciones y alcance del modelo
+
+El modelo UPPAAL es una **abstracción fiel pero reducida** de la especificación
+VDM++, elegida para que el *model checking* sea tratable. Conviene declararla
+explícitamente:
+
+- **Invariante I1** (toda ruta asignada cumple `esRutaValida`) no tiene una
+  propiedad `P` propia porque se **descompone** en el modelo: la terminación en
+  una salida está garantizada por construcción (toda `Aula` sólo puede terminar
+  en `Evacuada` tras pasar por la salida), el uso de tramos habilitados lo cubre
+  **P2**, y la capacidad residual la cubre **P1**. Es decir, `I1 ≈ P1 + P2 +
+  topología fija`.
+- **SIN_RUTA** modela sus **dos** causas de VDM++: tramo bloqueado (I3) y
+  agotamiento de capacidad (`buscarRuta = nil`). El caso **mixto** (una aula
+  evacúa, otra sin ruta) es alcanzable y se verifica con **P7**.
+- **Instancia mínima:** 2 aulas de piso 1 y una escalera compartida. Es el
+  núcleo de contención del pabellón de referencia; cualquier pabellón real se
+  obtiene escalando `N_AULAS`, `OCUP`, `CAP_ESC` y `CAP_SAL`, o replicando las
+  plantillas. Las propiedades P1–P7 son independientes de los valores concretos.
+- **Sin tiempo real:** como en VDM++, el modelo captura transiciones de estado
+  discretas. Los relojes de UPPAAL no se usan porque el objetivo es verificar
+  seguridad y progreso lógicos, no tiempos de evacuación (trabajo futuro).
+
 ## Experimento de error (issue E4-11)
 
 El modelo `VERA_sin_guarda.xml` elimina la guarda `carga_esc + OCUP <= CAP_ESC`
