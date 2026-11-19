@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_1.dtd'>
+<nta>
+	<declaration>
+// ============================================================
+// VERA - Modelo UPPAAL (Entregable 4: Model Checking)
+//
+// Correspondencia con la especificacion VDM++:
+//   SistemaEvacuacion  -> plantilla Sistema
+//   Planificador.carga -> variables carga_esc / carga_sal
+//   Tipos.capacidad    -> constantes CAP_ESC / CAP_SAL
+//   EstadoAula         -> localizaciones de la plantilla Aula
+//
+// Las capacidades se reducen respecto a la Norma A.130 para
+// mantener el model checking tratable, preservando la relacion
+// de contension critica: dos aulas de piso 1 compiten por una
+// unica escalera cuya capacidad no admite su paso simultaneo
+// (2 * 80 = 160 &gt; 150). Cualquier pabellon real se obtiene
+// escalando estas constantes.
+// ============================================================
+
+const int N_AULAS = 2;      // aulas de piso 1 (cuello de botella escalera)
+const int OCUP    = 80;     // personas por aula
+const int CAP_ESC = 150;    // escalera 1.20 m  -> floor(1.20/0.008) = 150 (A.130)
+const int CAP_SAL = 200;    // salida   1.00 m  -> floor(1.00/0.005) = 200 (A.130)
+
+int carga_esc = 0;          // carga actual de la escalera (Planificador.carga)
+int carga_sal = 0;          // carga actual de la salida
+int evacuadas = 0;          // numero de aulas en estado EVACUADA
+int sin_ruta  = 0;          // numero de aulas en estado SIN_RUTA
+
+bool evacuando     = false; // SistemaEvacuacion.estado = EVACUANDO
+bool esc_bloqueada = false; // Tramo escalera.estado    = BLOQUEADO
+
+broadcast chan alerta;      // senal sismica -> activarAlerta()
+	</declaration>
+
+	<!-- ================= PLANTILLA SISTEMA ================= -->
+	<template>
+		<name x="0" y="0">Sistema</name>
+		<location id="id0" x="-400" y="0">
+			<name x="-440" y="-30">INACTIVO</name>
+		</location>
+		<location id="id1" x="-200" y="0">
+			<name x="-220" y="-30">ALERTA</name>
+		</location>
+		<location id="id2" x="0" y="0">
+			<name x="-20" y="-30">EVACUANDO</name>
+		</location>
+		<location id="id3" x="250" y="-80">
+			<name x="230" y="-110">FINALIZADO</name>
+		</location>
+		<location id="id4" x="250" y="80">
+			<name x="230" y="100">FINALIZADO_PARCIAL</name>
+		</location>
+		<init ref="id0"/>
+		<transition>
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="-360" y="-30">alerta?</label>
+		</transition>
+		<transition>
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="assignment" x="-160" y="-30">evacuando = true</label>
+		</transition>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="guard" x="40" y="-80">evacuadas == N_AULAS</label>
+		</transition>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id4"/>
+			<label kind="guard" x="40" y="60">evacuadas + sin_ruta == N_AULAS &amp;&amp; sin_ruta &gt; 0</label>
+		</transition>
+	</template>
+
+	<!-- ================= PLANTILLA ENTORNO ================= -->
+	<template>
+		<name x="0" y="0">Entorno</name>
+		<location id="id5" x="-400" y="0">
+			<name x="-420" y="-30">Inicio</name>
+		</location>
+		<location id="id6" x="-200" y="0">
+			<name x="-230" y="-30">Decidido</name>
+		</location>
+		<location id="id7" x="0" y="0">
+			<name x="-40" y="-30">AlertaEnviada</name>
+		</location>
+		<init ref="id5"/>
+		<!-- Escenario SIN bloqueo -->
+		<transition>
+			<source ref="id5"/>
+			<target ref="id6"/>
+		</transition>
+		<!-- Escenario CON bloqueo de escalera (no determinista) -->
+		<transition>
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="assignment" x="-360" y="20">esc_bloqueada = true</label>
+		</transition>
+		<transition>
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="synchronisation" x="-160" y="-30">alerta!</label>
+		</transition>
+	</template>
+
+	<!-- ================= PLANTILLA AULA ================= -->
+	<template>
+		<name x="0" y="0">Aula</name>
+		<parameter>const int id</parameter>
+		<location id="id8" x="-400" y="0">
+			<name x="-430" y="-30">Pendiente</name>
+		</location>
+		<location id="id9" x="-150" y="-80">
+			<name x="-180" y="-110">EnEscalera</name>
+		</location>
+		<location id="id10" x="100" y="-80">
+			<name x="80" y="-110">Saliendo</name>
+		</location>
+		<location id="id11" x="350" y="-80">
+			<name x="330" y="-110">Evacuada</name>
+		</location>
+		<location id="id12" x="-150" y="100">
+			<name x="-180" y="120">SinRuta</name>
+		</location>
+		<init ref="id8"/>
+		<!-- Sin ruta: el sistema evacua pero la escalera esta bloqueada (I3) -->
+		<transition>
+			<source ref="id8"/>
+			<target ref="id12"/>
+			<label kind="guard" x="-390" y="40">evacuando &amp;&amp; esc_bloqueada</label>
+			<label kind="assignment" x="-390" y="60">sin_ruta++</label>
+		</transition>
+		<!-- Sin ruta por agotamiento de capacidad: equivale a buscarRuta()=nil
+		     en VDM++ cuando no hay capacidad residual suficiente -->
+		<transition>
+			<source ref="id8"/>
+			<target ref="id12"/>
+			<label kind="guard" x="-390" y="130">evacuando &amp;&amp; !esc_bloqueada &amp;&amp; carga_esc + OCUP &gt; CAP_ESC</label>
+			<label kind="assignment" x="-390" y="150">sin_ruta++</label>
+		</transition>
+		<!-- Descender por la escalera: GUARDA DE CAPACIDAD (nucleo del E4) -->
+		<transition>
+			<source ref="id8"/>
+			<target ref="id9"/>
+			<label kind="guard" x="-390" y="-90">evacuando &amp;&amp; !esc_bloqueada &amp;&amp; carga_esc + OCUP &lt;= CAP_ESC</label>
+			<label kind="assignment" x="-390" y="-70">carga_esc += OCUP</label>
+		</transition>
+		<!-- Pasar de la escalera a la salida (libera escalera, reserva salida) -->
+		<transition>
+			<source ref="id9"/>
+			<target ref="id10"/>
+			<label kind="guard" x="-130" y="-110">carga_sal + OCUP &lt;= CAP_SAL</label>
+			<label kind="assignment" x="-130" y="-60">carga_esc -= OCUP,
+carga_sal += OCUP</label>
+		</transition>
+		<!-- Evacuar: libera la salida -->
+		<transition>
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="assignment" x="120" y="-60">carga_sal -= OCUP,
+evacuadas++</label>
+		</transition>
+	</template>
+
+	<!-- ================= COMPOSICION DEL SISTEMA ================= -->
+	<system>
+sistema = Sistema();
+entorno = Entorno();
+A1 = Aula(1);
+A2 = Aula(2);
+
+system sistema, entorno, A1, A2;
+	</system>
+
+	<!-- ================= CONSULTAS P1-P5 ================= -->
+	<queries>
+		<query>
+			<formula>A[] carga_esc &lt;= CAP_ESC &amp;&amp; carga_sal &lt;= CAP_SAL</formula>
+			<comment>P1 (Seguridad de aforo, Invariante I2 / Norma A.130): en todo estado alcanzable ningun tramo supera su capacidad. DEBE cumplirse.</comment>
+		</query>
+		<query>
+			<formula>A[] esc_bloqueada imply (not A1.EnEscalera &amp;&amp; not A2.EnEscalera)</formula>
+			<comment>P2 (No uso de tramo bloqueado, Invariante I3): si la escalera esta bloqueada, ningun aula transita por ella. DEBE cumplirse.</comment>
+		</query>
+		<query>
+			<formula>A[] deadlock imply (sistema.FINALIZADO or sistema.FINALIZADO_PARCIAL)</formula>
+			<comment>P3 (Ausencia de interbloqueo espurio): el unico modo en que el sistema se detiene es habiendo alcanzado un estado final correcto. Nota: 'A[] not deadlock' NO se cumple porque los estados finales legitimos (FINALIZADO, Evacuada, SinRuta) no tienen transiciones de salida; por eso se verifica la ausencia de interbloqueo PREMATURO. DEBE cumplirse.</comment>
+		</query>
+		<query>
+			<formula>sistema.EVACUANDO --&gt; (sistema.FINALIZADO or sistema.FINALIZADO_PARCIAL)</formula>
+			<comment>P4 (Progreso, Invariante I4): toda evacuacion en curso alcanza siempre una finalizacion (plena o parcial). DEBE cumplirse.</comment>
+		</query>
+		<query>
+			<formula>A[] sistema.FINALIZADO imply evacuadas == N_AULAS</formula>
+			<comment>P5 (Finalizacion segura, Invariante I5): el sistema solo declara FINALIZADO cuando todas las aulas estan evacuadas. DEBE cumplirse.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; sistema.FINALIZADO</formula>
+			<comment>P6 (Alcanzabilidad): el estado FINALIZADO es realmente alcanzable; evita que las propiedades A[] sean vacuamente ciertas. DEBE cumplirse.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; sistema.FINALIZADO_PARCIAL</formula>
+			<comment>P7 (Alcanzabilidad): el estado FINALIZADO_PARCIAL (alguna aula SIN_RUTA, caso mixto incluido) es alcanzable. DEBE cumplirse.</comment>
+		</query>
+	</queries>
+</nta>
