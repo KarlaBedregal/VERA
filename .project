@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>VERA</name>
+	<comment>Especificación Formal y Validación en VDM++ de un Sistema de Evacuación Sísmica con Rutas Adaptativas para un Pabellón Universitario — UNSA 2026-B</comment>
+	<projects>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>org.overture.ide.vdmpp.core.builder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>org.overture.ide.vdmpp.core.nature</nature>
+	</natures>
+</projectDescription>
