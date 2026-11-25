@@ -340,6 +340,18 @@ operations
         carga_map(tid) <= Tipos`capacidad(tramos_map(tid))
   );
 
+  -- Verifica I3: ninguna ruta asignada pasa por un tramo BLOQUEADO
+  public verificarI3: () ==> bool
+  verificarI3() ==
+  (
+    dcl tramos_map : map Tipos`TramoId to Tipos`Tramo := pabellon.getTramos();
+    return forall a in set dom asignacion &
+      asignacion(a) <> nil =>
+        not exists tid in set dom tramos_map &
+          tramos_map(tid).estado = <BLOQUEADO> and
+          planif.rutaUsaTramo(asignacion(a), tid, tramos_map)
+  );
+
   -- Verifica I4: durante EVACUANDO toda aula ocupada tiene ruta o SIN_RUTA
   public verificarI4: () ==> bool
   verificarI4() ==
@@ -361,9 +373,10 @@ operations
   (
     dcl i1 : bool := verificarI1();
     dcl i2 : bool := verificarI2();
+    dcl i3 : bool := verificarI3();
     dcl i4 : bool := verificarI4();
     dcl i5 : bool := verificarI5();
-    return i1 and i2 and i4 and i5
+    return i1 and i2 and i3 and i4 and i5
   );
 
 end SistemaEvacuacion

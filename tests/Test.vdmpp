@@ -1,6 +1,6 @@
 -- ============================================================
 -- Test.vdmpp
--- Escenarios de prueba T1–T9 del sistema VERA.
+-- Escenarios de prueba T1–T10 del sistema VERA.
 --
 -- Marco metodológico: NIST TN 1822 (Ronchi et al., 2013)
 -- Componentes verificados:
@@ -9,6 +9,7 @@
 --   · Restricciones flujo   → T4, T5
 --   · Seguridad             → T9
 --   · Escalabilidad         → T8
+--   · Distancia real (RF04) → T10  (Dijkstra por metros vs BFS por tramos)
 --
 -- Cómo ejecutar en Overture:
 --   Seleccionar clase Test → Run as VDM Launch Configuration
