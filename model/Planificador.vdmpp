@@ -128,6 +128,99 @@ operations
                       personas);
 
 -- ============================================================
+-- BÚSQUEDA POR DISTANCIA REAL (DIJKSTRA) — RF04
+-- ============================================================
+
+  -- ----------------------------------------------------------
+  -- buscarRutaDijkstra: ruta de MENOR DISTANCIA EN METROS desde
+  -- `origen` hasta la salida más cercana, respetando la capacidad
+  -- residual de cada tramo (Norma A.130). Implementa RF04.
+  --
+  -- Diferencia con buscarRuta (BFS): el BFS minimiza el NÚMERO de
+  -- tramos; Dijkstra minimiza la LONGITUD real acumulada usando el
+  -- campo `longitud` de cada tramo. Una ruta con más tramos pero
+  -- físicamente más corta en metros resulta preferida.
+  --
+  -- Pre : el nodo origen existe en el grafo.
+  -- Post: si el resultado no es nil, cumple esRutaValida.
+  -- ----------------------------------------------------------
+  public buscarRutaDijkstra: Tipos`NodoId * nat ==> [Tipos`Ruta]
+  buscarRutaDijkstra(origen, personas) ==
+    dcl dist      : map Tipos`NodoId to real        := {origen |-> 0};
+    dcl prev      : map Tipos`NodoId to Tipos`NodoId := {|->};
+    dcl visitados : set of Tipos`NodoId             := {};
+    dcl resultado : [Tipos`Ruta]                    := nil;
+    (
+      while resultado = nil and
+            (exists n in set dom dist & n not in set visitados) do
+      (
+        -- Nodo no visitado con menor distancia tentativa acumulada
+        dcl u : Tipos`NodoId :=
+              let n in set (dom dist \ visitados) be st
+                not exists m in set (dom dist \ visitados) &
+                  dist(m) < dist(n)
+              in n;
+
+        visitados := visitados union {u};
+
+        -- La primera salida extraída es la de menor distancia total
+        if u in set pabellon.getSalidas()
+        then resultado := reconstruirRuta(prev, origen, u)
+        else
+          -- Relajar vecinos habilitados con capacidad suficiente
+          for all t in set pabellon.getTramosDesde(u) do
+          (
+            dcl cargaActual : nat :=
+              if t.id in set dom carga then carga(t.id) else 0;
+
+            if t.estado = <HABILITADO>
+               and Tipos`capacidadResidual(t, cargaActual) >= personas
+               and t.destino not in set visitados
+            then
+            (
+              dcl nuevaDist : real := dist(u) + t.longitud;
+              if t.destino not in set dom dist or
+                 nuevaDist < dist(t.destino)
+              then
+              (
+                dist := dist ++ {t.destino |-> nuevaDist};
+                prev := prev ++ {t.destino |-> u}
+              )
+            )
+          )
+      );
+      return resultado
+    )
+  pre  origen in set dom pabellon.getNodos()
+  post RESULT <> nil =>
+         esRutaValida(RESULT,
+                      pabellon.getTramos(),
+                      pabellon.getSalidas(),
+                      carga,
+                      personas);
+
+  -- ----------------------------------------------------------
+  -- reconstruirRuta: arma la ruta origen→destino siguiendo hacia
+  -- atrás el mapa `prev` de predecesores que llena Dijkstra.
+  -- ----------------------------------------------------------
+  private reconstruirRuta: map Tipos`NodoId to Tipos`NodoId *
+                           Tipos`NodoId * Tipos`NodoId ==> Tipos`Ruta
+  reconstruirRuta(prev, origen, destino) ==
+    dcl ruta   : Tipos`Ruta   := [destino];
+    dcl actual : Tipos`NodoId := destino;
+    (
+      while actual <> origen do
+      (
+        actual := prev(actual);
+        ruta   := [actual] ^ ruta
+      );
+      return ruta
+    )
+  -- Blindaje: si destino = origen (origen ya es salida) devuelve [origen];
+  -- en otro caso el destino debe tener predecesor registrado por Dijkstra.
+  pre destino = origen or destino in set dom prev;
+
+-- ============================================================
 -- ASIGNACIÓN DE RUTAS (estilo CCRP)
 -- ============================================================
 
@@ -139,7 +232,8 @@ operations
   --   2. A igual piso, mayor ocupación primero
   --
   -- Para cada aula (en orden de prioridad):
-  --   - Busca la ruta más corta con capacidad suficiente.
+  --   - Busca con Dijkstra la ruta más corta EN METROS con
+  --     capacidad suficiente (RF04).
   --   - Si la encuentra: la asigna y reserva la capacidad.
   --   - Si no: asigna nil (el aula quedará marcada SIN_RUTA).
   --
@@ -167,10 +261,11 @@ operations
                    ocupacion(b) > ocupacion(a))
               in a;
 
-        -- Buscar ruta solo si el aula tiene ocupantes
+        -- Buscar la ruta MÁS CORTA EN METROS (Dijkstra, RF04) con
+        -- capacidad suficiente, solo si el aula tiene ocupantes
         dcl ruta : [Tipos`Ruta] := nil;
         if ocupacion(siguiente) > 0
-        then ruta := buscarRuta(siguiente, ocupacion(siguiente));
+        then ruta := buscarRutaDijkstra(siguiente, ocupacion(siguiente));
 
         -- Registrar asignación (nil si no hay ruta factible)
         asignacion := asignacion ++ {siguiente |-> ruta};
@@ -251,10 +346,10 @@ operations
     if rutaAnterior <> nil
     then liberarCapacidad(rutaAnterior, personas);
 
-    -- Buscar nueva ruta
+    -- Buscar nueva ruta (más corta en metros, con capacidad)
     dcl nuevaRuta : [Tipos`Ruta] := nil;
     if personas > 0
-    then nuevaRuta := buscarRuta(aula, personas);
+    then nuevaRuta := buscarRutaDijkstra(aula, personas);
 
     -- Reservar capacidad de la nueva ruta
     if nuevaRuta <> nil

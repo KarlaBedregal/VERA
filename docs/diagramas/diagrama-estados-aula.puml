@@ -1,0 +1,32 @@
+@startuml VERA-estados-aula
+' ============================================================
+' VERA - Diagrama de Estados de un Aula
+' Corresponde al tipo EstadoAula y a como lo actualizan las
+' operaciones de SistemaEvacuacion.
+' ============================================================
+title VERA — Estados de un Aula (EstadoAula)
+
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #FDFDFD
+  BorderColor #2C3E50
+  ArrowColor #2C3E50
+}
+
+[*] --> PENDIENTE
+
+PENDIENTE   : tiene ocupantes, sin ruta aun
+EN_TRANSITO : ruta asignada, ocupantes saliendo
+EVACUADA    : ocupacion = 0, completada
+SIN_RUTA    : no existe ruta factible
+
+PENDIENTE   --> EN_TRANSITO : asignarRutas()\n[ruta <> nil]
+PENDIENTE   --> SIN_RUTA    : asignarRutas()\n[ruta = nil]
+PENDIENTE   --> EVACUADA    : asignarRutas()\n[ocupacion = 0]
+EN_TRANSITO --> EN_TRANSITO : bloquearTramo()\n[reasignada a ruta alterna]
+EN_TRANSITO --> SIN_RUTA    : bloquearTramo()\n[sin alternativa]
+EN_TRANSITO --> EVACUADA    : confirmarEvacuada()
+
+EVACUADA --> [*]
+
+@enduml

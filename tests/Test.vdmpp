@@ -212,15 +212,15 @@ operations
     pb.agregarNodo(mk_Tipos`Nodo(2, <PASO>,   0));
     pb.agregarNodo(mk_Tipos`Nodo(4, <PASO>,   0));
 
-    -- Tramos:
+    -- Tramos (6º arg = longitud en metros):
     -- T1 : Aula → Pasillo (puerta 1.00m, cap 200)
-    pb.agregarTramo(mk_Tipos`Tramo(1, 1, 2, <PUERTA>,  1.00, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(1, 1, 2, <PUERTA>,  1.00, 1.0, <HABILITADO>));
     -- T2 : Pasillo → Salida_directa (estrecho 0.50m, cap 100) — INSUFICIENTE
-    pb.agregarTramo(mk_Tipos`Tramo(2, 2, 3, <PUERTA>,  0.50, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(2, 2, 3, <PUERTA>,  0.50, 1.0, <HABILITADO>));
     -- T3 : Pasillo → Pasillo_ancho (2.40m, cap 480) — ruta alternativa
-    pb.agregarTramo(mk_Tipos`Tramo(3, 2, 4, <PASILLO>, 2.40, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(3, 2, 4, <PASILLO>, 2.40, 2.0, <HABILITADO>));
     -- T4 : Pasillo_ancho → Salida_alternativa (1.00m, cap 200) — suficiente
-    pb.agregarTramo(mk_Tipos`Tramo(4, 4, 5, <PUERTA>,  1.00, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(4, 4, 5, <PUERTA>,  1.00, 1.0, <HABILITADO>));
 
     -- 150 personas en el aula > cap(T2)=100, pero <= cap(T4)=200
     dcl ocp : map Tipos`NodoId to nat := {1 |-> 150};
@@ -300,13 +300,13 @@ operations
     pb.agregarNodo(mk_Tipos`Nodo(3, <PASO>,   0));  -- Pasillo
     pb.agregarNodo(mk_Tipos`Nodo(5, <PASO>,   0));  -- Pasillo alternativo
 
-    -- Ruta directa (2 tramos al nodo 4)
-    pb.agregarTramo(mk_Tipos`Tramo(1, 1, 3, <PUERTA>,  1.00, <HABILITADO>));
-    pb.agregarTramo(mk_Tipos`Tramo(2, 2, 3, <PUERTA>,  1.00, <HABILITADO>));
-    pb.agregarTramo(mk_Tipos`Tramo(3, 3, 4, <PUERTA>,  1.00, <HABILITADO>));
-    -- Ruta alternativa más larga (3 tramos al nodo 6) — NO usada por BFS
-    pb.agregarTramo(mk_Tipos`Tramo(4, 3, 5, <PASILLO>, 2.40, <HABILITADO>));
-    pb.agregarTramo(mk_Tipos`Tramo(5, 5, 6, <PUERTA>,  1.00, <HABILITADO>));
+    -- Ruta directa (2 tramos al nodo 4) — también la más corta en metros (2 m)
+    pb.agregarTramo(mk_Tipos`Tramo(1, 1, 3, <PUERTA>,  1.00, 1.0, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(2, 2, 3, <PUERTA>,  1.00, 1.0, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(3, 3, 4, <PUERTA>,  1.00, 1.0, <HABILITADO>));
+    -- Ruta alternativa más larga (3 tramos, 11 m al nodo 6) — NO elegida
+    pb.agregarTramo(mk_Tipos`Tramo(4, 3, 5, <PASILLO>, 2.40, 5.0, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(5, 5, 6, <PUERTA>,  1.00, 5.0, <HABILITADO>));
 
     dcl ocp : map Tipos`NodoId to nat := {1 |-> 30, 2 |-> 30};
     dcl pl  : Planificador   := new Planificador(pb);
@@ -465,6 +465,53 @@ operations
     -- porque la precondición de finalizarEvacuacion no se cumple.
     -- Capturar la pantalla del error para el entregable.
     se.finalizarEvacuacion()  -- PRECONDITION FAILURE esperado aquí
+  );
+
+-- ============================================================
+-- T10: Dijkstra por distancia real — componente "RF04"
+-- ============================================================
+--  Escenario: desde un aula hay DOS rutas a una salida:
+--    · Ruta A: 2 tramos pero LARGA  (2 + 30 = 32 m) → salida nodo 3
+--    · Ruta B: 3 tramos pero CORTA  (5 + 5 + 5 = 15 m) → salida nodo 6
+--  Esperado:
+--    · buscarRuta (BFS, minimiza tramos) elige la Ruta A (nodo 3).
+--    · buscarRutaDijkstra (minimiza metros) elige la Ruta B (nodo 6),
+--      aunque tenga MÁS tramos. Esto demuestra el RF04 (distancia real).
+  public T10_dijkstraPorDistancia: () ==> ()
+  T10_dijkstraPorDistancia() ==
+  (
+    dcl pb : Pabellon := new Pabellon();
+
+    -- Salidas PRIMERO (invariante I-P2)
+    pb.agregarNodo(mk_Tipos`Nodo(3, <SALIDA>, 0));  -- salida de la ruta corta en tramos
+    pb.agregarNodo(mk_Tipos`Nodo(6, <SALIDA>, 0));  -- salida de la ruta corta en metros
+    pb.agregarNodo(mk_Tipos`Nodo(1, <AULA>, 0));
+    pb.agregarNodo(mk_Tipos`Nodo(2, <PASO>, 0));
+    pb.agregarNodo(mk_Tipos`Nodo(4, <PASO>, 0));
+    pb.agregarNodo(mk_Tipos`Nodo(5, <PASO>, 0));
+
+    -- Ruta A: pocos tramos pero larga en metros (anchos holgados, sin límite de capacidad)
+    pb.agregarTramo(mk_Tipos`Tramo(1, 1, 2, <PASILLO>, 2.40,  2.0, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(2, 2, 3, <PASILLO>, 2.40, 30.0, <HABILITADO>));
+    -- Ruta B: más tramos pero corta en metros
+    pb.agregarTramo(mk_Tipos`Tramo(3, 1, 4, <PASILLO>, 2.40,  5.0, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(4, 4, 5, <PASILLO>, 2.40,  5.0, <HABILITADO>));
+    pb.agregarTramo(mk_Tipos`Tramo(5, 5, 6, <PASILLO>, 2.40,  5.0, <HABILITADO>));
+
+    dcl pl : Planificador := new Planificador(pb);
+
+    -- BFS minimiza número de tramos → llega a la salida 3 (2 tramos, 32 m)
+    dcl rutaBFS : [Tipos`Ruta] := pl.buscarRuta(1, 30);
+    asegurar(rutaBFS <> nil);
+    asegurar(rutaBFS(len rutaBFS) = 3);
+
+    -- Dijkstra minimiza metros → llega a la salida 6 (3 tramos, 15 m)
+    dcl rutaDij : [Tipos`Ruta] := pl.buscarRutaDijkstra(1, 30);
+    asegurar(rutaDij <> nil);
+    asegurar(rutaDij(len rutaDij) = 6);
+
+    -- La ruta de Dijkstra tiene MÁS tramos pero MENOS metros: eso es RF04
+    asegurar(len rutaDij > len rutaBFS)
   );
 
 end Test

@@ -1,0 +1,30 @@
+@startuml VERA-estados-sistema
+' ============================================================
+' VERA - Diagrama de Estados del SistemaEvacuacion
+' Corresponde al tipo EstadoSist y a las operaciones del
+' ciclo de vida de la clase SistemaEvacuacion.
+' ============================================================
+title VERA — Ciclo de vida del SistemaEvacuacion (EstadoSist)
+
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #FDFDFD
+  BorderColor #2C3E50
+  ArrowColor #2C3E50
+}
+
+[*] --> INACTIVO
+
+INACTIVO : estado normal, sin alerta
+ALERTA   : senal sismica recibida
+EVACUANDO : rutas asignadas, evacuacion en curso
+FINALIZADO : proceso cerrado
+
+INACTIVO  --> ALERTA    : activarAlerta()
+ALERTA    --> EVACUANDO : asignarRutas()
+EVACUANDO --> EVACUANDO : bloquearTramo(tid)\n[reasigna rutas afectadas]
+EVACUANDO --> EVACUANDO : confirmarEvacuada(a)\n[libera capacidad]
+EVACUANDO --> FINALIZADO : finalizarEvacuacion()\n[guarda: toda aula EVACUADA\no con ocupacion 0]  (I5)
+FINALIZADO --> [*]
+
+@enduml

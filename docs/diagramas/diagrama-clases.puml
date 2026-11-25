@@ -1,0 +1,104 @@
+@startuml VERA-diagrama-clases
+' ============================================================
+' VERA - Diagrama de Clases (especificacion VDM++)
+' UNSA 2026-B
+' Render:  plantuml diagrama-clases.puml   (genera PNG)
+'          o extension PlantUML de VS Code
+' ============================================================
+title VERA — Diagrama de Clases (VDM++)
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam class {
+  BackgroundColor #FDFDFD
+  BorderColor #2C3E50
+  ArrowColor #2C3E50
+}
+
+class Tipos <<utilidad/tipos>> {
+  +FACTOR_PASILLO : real = 0.005
+  +FACTOR_ESCALERA : real = 0.008
+  +ANCHO_MIN_PUERTA : real = 1.00
+  +OCUPACION_AULA : nat1 = 30
+  __ funciones puras __
+  +capacidad(t : Tramo) : nat1
+  +capacidadResidual(t, carga) : nat
+  +capacidadPorAncho(tipo, ancho) : nat1
+}
+
+note bottom of Tipos
+  **Tipos** = NodoId, TramoId, TipoNodo,
+  TipoTramo, EstadoTramo, EstadoAula, EstadoSist
+  **Records** = Nodo, Tramo, Ruta
+end note
+
+class Pabellon {
+  -nodos : map NodoId to Nodo
+  -tramos : map TramoId to Tramo
+  __ operaciones __
+  +agregarNodo(n : Nodo)
+  +agregarTramo(t : Tramo)
+  +bloquearTramo(tid)
+  +habilitarTramo(tid)
+  +getSalidas() : set of NodoId
+  +getAulas() : set of NodoId
+  +getTramosDesde(nid) : set of Tramo
+  +getTramoEntre(o, d) : [Tramo]
+  +getAulasPorPiso(piso) : set of NodoId
+  __ invariantes __
+  I-P1 : los extremos de cada tramo existen
+  I-P2 : existe al menos una SALIDA
+}
+
+class PabellonUNSA {
+  +inicializar()
+  +ocupacionEstandar() : map NodoId to nat
+}
+
+class Planificador {
+  -pabellon : Pabellon
+  -carga : map TramoId to nat
+  __ operaciones __
+  +buscarRuta(origen, personas) : [Ruta]
+  +asignarTodas(ocupacion) : map NodoId to [Ruta]
+  +reasignarRuta(aula, ruta, personas) : [Ruta]
+  +reservarCapacidad(ruta, personas)
+  +liberarCapacidad(ruta, personas)
+  __ funciones puras __
+  +esRutaValida(...) : bool
+  +rutaUsaTramo(ruta, tid, tramos) : bool
+}
+
+class SistemaEvacuacion {
+  -estado : EstadoSist
+  -asignacion : map NodoId to [Ruta]
+  -estadoAula : map NodoId to EstadoAula
+  -ocupacion : map NodoId to nat
+  -pabellon : Pabellon
+  -planif : Planificador
+  __ ciclo de vida __
+  +activarAlerta()
+  +asignarRutas()
+  +bloquearTramo(tid)
+  +confirmarEvacuada(a)
+  +finalizarEvacuacion()
+  __ verificacion __
+  +verificarI1() .. verificarI5() : bool
+  __ invariantes I1-I5 __
+}
+
+class GeneradorPabellon {
+  +generar(nPisos) : Pabellon
+  +generarConOcupacion(nPisos, personas) : Pabellon * map
+}
+
+PabellonUNSA --|> Pabellon
+Planificador "1" o--> "1" Pabellon
+SistemaEvacuacion "1" o--> "1" Pabellon
+SistemaEvacuacion "1" o--> "1" Planificador
+GeneradorPabellon ..> Pabellon : «crea»
+Pabellon ..> Tipos : «usa»
+Planificador ..> Tipos : «usa»
+SistemaEvacuacion ..> Tipos : «usa»
+
+@enduml

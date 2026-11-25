@@ -1,4 +1,27 @@
 elemento_id,tipo,piso,descripcion,ancho_m,largo_m,capacidad_A130,notas
-# TODO (E3-07): completar con mediciones del jueves 15 oct
-# tipo: AULA | PASILLO | ESCALERA | PUERTA | SALIDA
-# capacidad_A130: floor(ancho/0.005) para pasillo/puerta, floor(ancho/0.008) para escalera
+# ancho_m: Norma A.130 (determina capacidad). largo_m: distancia real (RF04/Dijkstra).
+# capacidad_A130: floor(ancho/0.005) pasillo/puerta ; floor(ancho/0.008) escalera
+# ⚠ largo_m = VALORES DE REFERENCIA. REEMPLAZAR por mediciones reales del pabellon.
+#   Al medir, actualizar tambien el 6º argumento de cada Tramo en PabellonUNSA.vdmpp.
+3201,PUERTA,2,Aula 2-01 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+3202,PUERTA,2,Aula 2-02 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+3203,PUERTA,2,Aula 2-03 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+3204,PUERTA,2,Aula 2-04 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+1261,PASILLO,2,Pasillo 2 -> descanso escalera A,2.40,6.0,480,REFERENCIA - medir
+1262,PASILLO,2,Pasillo 2 -> descanso escalera B,2.40,6.0,480,REFERENCIA - medir
+2261,ESCALERA,2,Escalera A piso 2 -> piso 1,1.20,4.0,150,REFERENCIA - medir
+2262,ESCALERA,2,Escalera B piso 2 -> piso 1,1.20,4.0,150,REFERENCIA - medir
+3101,PUERTA,1,Aula 1-01 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+3102,PUERTA,1,Aula 1-02 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+3103,PUERTA,1,Aula 1-03 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+3104,PUERTA,1,Aula 1-04 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+1161,PASILLO,1,Pasillo 1 -> descanso escalera A,2.40,6.0,480,REFERENCIA - medir
+1162,PASILLO,1,Pasillo 1 -> descanso escalera B,2.40,6.0,480,REFERENCIA - medir
+2161,ESCALERA,1,Escalera A piso 1 -> piso 0,1.20,4.0,150,REFERENCIA - medir
+2162,ESCALERA,1,Escalera B piso 1 -> piso 0,1.20,4.0,150,REFERENCIA - medir
+3001,PUERTA,0,Aula 0-01 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+3002,PUERTA,0,Aula 0-02 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+3003,PUERTA,0,Aula 0-03 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+3004,PUERTA,0,Aula 0-04 -> pasillo,1.00,1.0,200,REFERENCIA - medir
+4091,SALIDA,0,Pasillo 0 -> salida A,1.00,2.0,200,REFERENCIA - medir
+4092,SALIDA,0,Pasillo 0 -> salida B,1.00,2.0,200,REFERENCIA - medir

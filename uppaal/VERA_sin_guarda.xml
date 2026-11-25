@@ -40,9 +40,11 @@ broadcast chan alerta;
 		</location>
 		<location id="id1" x="-200" y="0">
 			<name x="-220" y="-30">ALERTA</name>
+			<urgent/>
 		</location>
 		<location id="id2" x="0" y="0">
 			<name x="-20" y="-30">EVACUANDO</name>
+			<urgent/>
 		</location>
 		<location id="id3" x="250" y="-80">
 			<name x="230" y="-110">FINALIZADO</name>
@@ -106,12 +108,15 @@ broadcast chan alerta;
 		<parameter>const int id</parameter>
 		<location id="id8" x="-400" y="0">
 			<name x="-430" y="-30">Pendiente</name>
+			<urgent/>
 		</location>
 		<location id="id9" x="-150" y="-80">
 			<name x="-180" y="-110">EnEscalera</name>
+			<urgent/>
 		</location>
 		<location id="id10" x="100" y="-80">
 			<name x="80" y="-110">Saliendo</name>
+			<urgent/>
 		</location>
 		<location id="id11" x="350" y="-80">
 			<name x="330" y="-110">Evacuada</name>

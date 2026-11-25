@@ -90,58 +90,66 @@ operations
     agregarNodo(mk_Tipos`Nodo(261, <DESCANSO>, 2));  -- Descanso escalera A, piso 2
     agregarNodo(mk_Tipos`Nodo(262, <DESCANSO>, 2));  -- Descanso escalera B, piso 2
 
+    -- ══════════════════════════════════════════════════════
+    -- LONGITUDES (6º argumento de Tramo): metros de referencia.
+    -- ⚠ PLACEHOLDER — reemplazar por las mediciones reales del
+    --   pabellón (ver data/pabellon-medidas.csv, columna largo_m).
+    --   Referencia:  puerta aula 1.0 m · pasillo→descanso 6.0 m
+    --                escalera 4.0 m · puerta salida 2.0 m
+    -- ══════════════════════════════════════════════════════
+
     -- ──────────────────────────────────────────────────────
     -- PISO 2 — Tramos
-    -- Puertas aula → pasillo central (1.00 m c/u → cap 200)
+    -- Puertas aula → pasillo central (ancho 1.00 m → cap 200)
     -- ──────────────────────────────────────────────────────
-    agregarTramo(mk_Tipos`Tramo(3201, 201, 250, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(3202, 202, 250, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(3203, 203, 250, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(3204, 204, 250, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3201, 201, 250, <PUERTA>, 1.00, 1.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3202, 202, 250, <PUERTA>, 1.00, 1.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3203, 203, 250, <PUERTA>, 1.00, 1.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3204, 204, 250, <PUERTA>, 1.00, 1.0, <HABILITADO>));
 
-    -- Pasillo → descansos escalera (2.40 m → cap 480)
-    agregarTramo(mk_Tipos`Tramo(1261, 250, 261, <PASILLO>, 2.40, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(1262, 250, 262, <PASILLO>, 2.40, <HABILITADO>));
+    -- Pasillo → descansos escalera (ancho 2.40 m → cap 480)
+    agregarTramo(mk_Tipos`Tramo(1261, 250, 261, <PASILLO>, 2.40, 6.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(1262, 250, 262, <PASILLO>, 2.40, 6.0, <HABILITADO>));
 
     -- ──────────────────────────────────────────────────────
-    -- ESCALERAS piso 2 → piso 1 (1.20 m → cap 150)
+    -- ESCALERAS piso 2 → piso 1 (ancho 1.20 m → cap 150)
     -- ──────────────────────────────────────────────────────
-    agregarTramo(mk_Tipos`Tramo(2261, 261, 161, <ESCALERA>, 1.20, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(2262, 262, 162, <ESCALERA>, 1.20, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(2261, 261, 161, <ESCALERA>, 1.20, 4.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(2262, 262, 162, <ESCALERA>, 1.20, 4.0, <HABILITADO>));
 
     -- ──────────────────────────────────────────────────────
     -- PISO 1 — Tramos
-    -- Puertas aula → pasillo central (1.00 m → cap 200)
+    -- Puertas aula → pasillo central (ancho 1.00 m → cap 200)
     -- ──────────────────────────────────────────────────────
-    agregarTramo(mk_Tipos`Tramo(3101, 101, 150, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(3102, 102, 150, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(3103, 103, 150, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(3104, 104, 150, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3101, 101, 150, <PUERTA>, 1.00, 1.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3102, 102, 150, <PUERTA>, 1.00, 1.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3103, 103, 150, <PUERTA>, 1.00, 1.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3104, 104, 150, <PUERTA>, 1.00, 1.0, <HABILITADO>));
 
-    -- Pasillo → descansos escalera (2.40 m → cap 480)
+    -- Pasillo → descansos escalera (ancho 2.40 m → cap 480)
     -- Para descender al piso 0 vía escalera A o B
-    agregarTramo(mk_Tipos`Tramo(1161, 150, 161, <PASILLO>, 2.40, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(1162, 150, 162, <PASILLO>, 2.40, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(1161, 150, 161, <PASILLO>, 2.40, 6.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(1162, 150, 162, <PASILLO>, 2.40, 6.0, <HABILITADO>));
 
     -- ──────────────────────────────────────────────────────
-    -- ESCALERAS piso 1 → piso 0 (1.20 m → cap 150)
+    -- ESCALERAS piso 1 → piso 0 (ancho 1.20 m → cap 150)
     -- Descanso piso 1 → pasillo piso 0
     -- ──────────────────────────────────────────────────────
-    agregarTramo(mk_Tipos`Tramo(2161, 161, 50, <ESCALERA>, 1.20, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(2162, 162, 50, <ESCALERA>, 1.20, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(2161, 161, 50, <ESCALERA>, 1.20, 4.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(2162, 162, 50, <ESCALERA>, 1.20, 4.0, <HABILITADO>));
 
     -- ──────────────────────────────────────────────────────
     -- PISO 0 — Tramos
-    -- Puertas aula → pasillo central (1.00 m → cap 200)
+    -- Puertas aula → pasillo central (ancho 1.00 m → cap 200)
     -- ──────────────────────────────────────────────────────
-    agregarTramo(mk_Tipos`Tramo(3001, 1, 50, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(3002, 2, 50, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(3003, 3, 50, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(3004, 4, 50, <PUERTA>, 1.00, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3001, 1, 50, <PUERTA>, 1.00, 1.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3002, 2, 50, <PUERTA>, 1.00, 1.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3003, 3, 50, <PUERTA>, 1.00, 1.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(3004, 4, 50, <PUERTA>, 1.00, 1.0, <HABILITADO>));
 
-    -- Pasillo → salidas exteriores (1.00 m → cap 200 c/u)
-    agregarTramo(mk_Tipos`Tramo(4091, 50, 91, <PUERTA>, 1.00, <HABILITADO>));
-    agregarTramo(mk_Tipos`Tramo(4092, 50, 92, <PUERTA>, 1.00, <HABILITADO>))
+    -- Pasillo → salidas exteriores (ancho 1.00 m → cap 200 c/u)
+    agregarTramo(mk_Tipos`Tramo(4091, 50, 91, <PUERTA>, 1.00, 2.0, <HABILITADO>));
+    agregarTramo(mk_Tipos`Tramo(4092, 50, 92, <PUERTA>, 1.00, 2.0, <HABILITADO>))
   )
   post -- Topología mínima: 21 nodos, 22 tramos, 2 salidas
        cantidadNodos()    = 21 and

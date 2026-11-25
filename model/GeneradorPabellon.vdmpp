@@ -37,6 +37,11 @@ values
   ANCHO_PUERTA   : real = 1.00;
   ANCHO_PASILLO  : real = 2.40;
   ANCHO_ESCALERA : real = 1.20;
+  -- Longitudes (metros) de referencia — reemplazar por mediciones reales
+  LARGO_PUERTA   : real = 1.0;   -- puerta de aula
+  LARGO_PASILLO  : real = 6.0;   -- pasillo → descanso de escalera
+  LARGO_ESCALERA : real = 4.0;   -- tramo de escalera entre pisos
+  LARGO_SALIDA   : real = 2.0;   -- puerta de salida exterior
 
 -- ============================================================
 -- OPERACIÓN PRINCIPAL
@@ -94,12 +99,12 @@ operations
             10000 + piso * 10 + 1,
             piso * 10 + 1,
             piso * 10 + 5,
-            <PUERTA>, ANCHO_PUERTA, <HABILITADO>));
+            <PUERTA>, ANCHO_PUERTA, LARGO_PUERTA, <HABILITADO>));
       p.agregarTramo(mk_Tipos`Tramo(
             10000 + piso * 10 + 2,
             piso * 10 + 2,
             piso * 10 + 5,
-            <PUERTA>, ANCHO_PUERTA, <HABILITADO>));
+            <PUERTA>, ANCHO_PUERTA, LARGO_PUERTA, <HABILITADO>));
 
       if piso > 0
       then
@@ -109,7 +114,7 @@ operations
               20000 + piso * 10,
               piso * 10 + 5,
               piso * 10 + 6,
-              <PASILLO>, ANCHO_PASILLO, <HABILITADO>));
+              <PASILLO>, ANCHO_PASILLO, LARGO_PASILLO, <HABILITADO>));
 
         -- Escalera: descanso piso actual → destino piso inferior
         -- Si el piso inferior es > 0: destino = descanso del piso inferior
@@ -120,23 +125,23 @@ operations
                 30000 + piso * 10,
                 piso * 10 + 6,
                 (piso - 1) * 10 + 6,
-                <ESCALERA>, ANCHO_ESCALERA, <HABILITADO>))
+                <ESCALERA>, ANCHO_ESCALERA, LARGO_ESCALERA, <HABILITADO>))
         else
           p.agregarTramo(mk_Tipos`Tramo(
                 30000 + piso * 10,
                 piso * 10 + 6,
                 5,
-                <ESCALERA>, ANCHO_ESCALERA, <HABILITADO>))
+                <ESCALERA>, ANCHO_ESCALERA, LARGO_ESCALERA, <HABILITADO>))
       )
     );
 
     -- Tramos pasillo planta baja → salidas
     p.agregarTramo(mk_Tipos`Tramo(
           40001, 5, nPisos * 10 + 91,
-          <PUERTA>, ANCHO_PUERTA, <HABILITADO>));
+          <PUERTA>, ANCHO_PUERTA, LARGO_SALIDA, <HABILITADO>));
     p.agregarTramo(mk_Tipos`Tramo(
           40002, 5, nPisos * 10 + 92,
-          <PUERTA>, ANCHO_PUERTA, <HABILITADO>));
+          <PUERTA>, ANCHO_PUERTA, LARGO_SALIDA, <HABILITADO>));
 
     return p
   )

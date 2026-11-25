@@ -43,9 +43,11 @@ broadcast chan alerta;      // senal sismica -> activarAlerta()
 		</location>
 		<location id="id1" x="-200" y="0">
 			<name x="-220" y="-30">ALERTA</name>
+			<urgent/>
 		</location>
 		<location id="id2" x="0" y="0">
 			<name x="-20" y="-30">EVACUANDO</name>
+			<urgent/>
 		</location>
 		<location id="id3" x="250" y="-80">
 			<name x="230" y="-110">FINALIZADO</name>
@@ -113,12 +115,15 @@ broadcast chan alerta;      // senal sismica -> activarAlerta()
 		<parameter>const int id</parameter>
 		<location id="id8" x="-400" y="0">
 			<name x="-430" y="-30">Pendiente</name>
+			<urgent/>
 		</location>
 		<location id="id9" x="-150" y="-80">
 			<name x="-180" y="-110">EnEscalera</name>
+			<urgent/>
 		</location>
 		<location id="id10" x="100" y="-80">
 			<name x="80" y="-110">Saliendo</name>
+			<urgent/>
 		</location>
 		<location id="id11" x="350" y="-80">
 			<name x="330" y="-110">Evacuada</name>
@@ -127,20 +132,14 @@ broadcast chan alerta;      // senal sismica -> activarAlerta()
 			<name x="-180" y="120">SinRuta</name>
 		</location>
 		<init ref="id8"/>
-		<!-- Sin ruta: el sistema evacua pero la escalera esta bloqueada (I3) -->
+		<!-- Sin ruta: el sistema evacua pero la escalera esta bloqueada (I3).
+		     El agotamiento temporal de capacidad NO produce SinRuta: se modela
+		     como espera en Pendiente (flujo secuencial por la escalera). -->
 		<transition>
 			<source ref="id8"/>
 			<target ref="id12"/>
 			<label kind="guard" x="-390" y="40">evacuando &amp;&amp; esc_bloqueada</label>
 			<label kind="assignment" x="-390" y="60">sin_ruta++</label>
-		</transition>
-		<!-- Sin ruta por agotamiento de capacidad: equivale a buscarRuta()=nil
-		     en VDM++ cuando no hay capacidad residual suficiente -->
-		<transition>
-			<source ref="id8"/>
-			<target ref="id12"/>
-			<label kind="guard" x="-390" y="130">evacuando &amp;&amp; !esc_bloqueada &amp;&amp; carga_esc + OCUP &gt; CAP_ESC</label>
-			<label kind="assignment" x="-390" y="150">sin_ruta++</label>
 		</transition>
 		<!-- Descender por la escalera: GUARDA DE CAPACIDAD (nucleo del E4) -->
 		<transition>

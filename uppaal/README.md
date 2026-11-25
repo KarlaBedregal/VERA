@@ -37,20 +37,27 @@ bloquea la escalera (cubre el escenario normal y el escenario con bloqueo).
 
 **Aula** (instanciada `A1`, `A2`) — estado de cada aula:
 ```
-Pendiente --[evacuando & esc_bloqueada]--------------------------> SinRuta    (sin_ruta++)   (escalera bloqueada, I3)
-Pendiente --[evacuando & !esc_bloqueada & carga_esc+OCUP>CAP_ESC]-> SinRuta    (sin_ruta++)   (sin capacidad, buscarRuta=nil)
+Pendiente --[evacuando & esc_bloqueada]------------------------> SinRuta    (sin_ruta++)   (escalera bloqueada, I3)
 Pendiente --[evacuando & !esc_bloqueada & carga_esc+OCUP<=CAP_ESC]-> EnEscalera (carga_esc += OCUP)
-EnEscalera --[carga_sal+OCUP<=CAP_SAL]--------------------------> Saliendo   (carga_esc -= OCUP; carga_sal += OCUP)
-Saliendo -------------------------------------------------------> Evacuada   (carga_sal -= OCUP; evacuadas++)
+EnEscalera --[carga_sal+OCUP<=CAP_SAL]-------------------------> Saliendo   (carga_esc -= OCUP; carga_sal += OCUP)
+Saliendo ------------------------------------------------------> Evacuada   (carga_sal -= OCUP; evacuadas++)
 ```
-Un aula queda **SinRuta** por dos causas, igual que en VDM++: la escalera está
-bloqueada (↔ tramo `BLOQUEADO`), o no hay capacidad residual suficiente
-(↔ `buscarRuta` devuelve `nil`). Esto hace alcanzable el **caso mixto**: una
-aula evacúa mientras otra queda sin ruta, que conduce a `FINALIZADO_PARCIAL`.
+Un aula queda **SinRuta** cuando la escalera está bloqueada (↔ tramo
+`BLOQUEADO`). El **agotamiento temporal de capacidad no produce SinRuta**: si la
+escalera está llena, el aula simplemente **espera** en `Pendiente` hasta que otra
+aula la libere (modelo de flujo secuencial por la escalera). Así se preserva la
+seguridad de aforo (P1) y, a la vez, ambas aulas logran evacuar (progreso, P4).
 
 La transición `Pendiente → EnEscalera` contiene la **guarda de capacidad**
 `carga_esc + OCUP <= CAP_ESC`, que es el equivalente operacional de la cláusula
 de capacidad residual de la función `esRutaValida` en VDM++.
+
+> **Localizaciones urgentes.** `ALERTA`, `EVACUANDO`, `Pendiente`, `EnEscalera` y
+> `Saliendo` se marcan como **urgentes** (sin invariantes de reloj) para forzar el
+> progreso discreto: el tiempo no avanza en ellas, de modo que el sistema no puede
+> "quedarse quieto" dejando pasar el tiempo. Esto es lo que hace que la propiedad
+> de vivacidad P4 (progreso) se satisfaga. Las localizaciones finales
+> (`FINALIZADO`, `FINALIZADO_PARCIAL`, `Evacuada`, `SinRuta`) NO son urgentes.
 
 ## Correspondencia VDM++ ↔ UPPAAL
 
@@ -110,9 +117,11 @@ explícitamente:
   en `Evacuada` tras pasar por la salida), el uso de tramos habilitados lo cubre
   **P2**, y la capacidad residual la cubre **P1**. Es decir, `I1 ≈ P1 + P2 +
   topología fija`.
-- **SIN_RUTA** modela sus **dos** causas de VDM++: tramo bloqueado (I3) y
-  agotamiento de capacidad (`buscarRuta = nil`). El caso **mixto** (una aula
-  evacúa, otra sin ruta) es alcanzable y se verifica con **P7**.
+- **SIN_RUTA** modela la causa de **tramo bloqueado** (I3). El agotamiento de
+  capacidad se abstrae como **espera** (flujo secuencial por la escalera), no como
+  SIN_RUTA: esto es lo que permite que ambas aulas evacúen (P4/P6) sin violar el
+  aforo (P1). `FINALIZADO_PARCIAL` (verificado con **P7**) se alcanza cuando la
+  escalera queda bloqueada y las aulas afectadas no pueden descender.
 - **Instancia mínima:** 2 aulas de piso 1 y una escalera compartida. Es el
   núcleo de contención del pabellón de referencia; cualquier pabellón real se
   obtiene escalando `N_AULAS`, `OCUP`, `CAP_ESC` y `CAP_SAL`, o replicando las

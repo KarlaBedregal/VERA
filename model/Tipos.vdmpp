@@ -97,13 +97,14 @@ types
   -- El ancho determina la capacidad máxima según la Norma A.130.
   -- Invariante: el tramo no puede conectar un nodo consigo mismo
   --             y su ancho debe ser positivo.
-  public Tramo :: id      : TramoId    -- identificador único
-                  origen  : NodoId     -- nodo de inicio del tramo
-                  destino : NodoId     -- nodo de destino del tramo
-                  tipo    : TipoTramo  -- pasillo, escalera o puerta
-                  ancho   : real       -- ancho en metros
-                  estado  : EstadoTramo
-  inv t == t.origen <> t.destino and t.ancho > 0;
+  public Tramo :: id       : TramoId    -- identificador único
+                  origen   : NodoId     -- nodo de inicio del tramo
+                  destino  : NodoId     -- nodo de destino del tramo
+                  tipo     : TipoTramo  -- pasillo, escalera o puerta
+                  ancho    : real       -- ancho en metros (-> capacidad A.130)
+                  longitud : real       -- largo en metros (-> distancia, RF04)
+                  estado   : EstadoTramo
+  inv t == t.origen <> t.destino and t.ancho > 0 and t.longitud > 0;
 
   -- ─── Ruta de evacuación ───────────────────────────────────
   -- Secuencia ordenada de nodos desde un aula hasta una salida.
