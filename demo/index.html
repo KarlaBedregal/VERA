@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VERA · Simulador de Evacuación Sísmica</title>
+  <link rel="stylesheet" href="css/estilo.css" />
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>VERA <span>· Simulador de Evacuación Sísmica</span></h1>
+    <p class="sub">Pabellón de referencia · ruteo <b>Dijkstra</b> con capacidad <b>Norma A.130</b> · UNSA 2026</p>
+  </header>
+
+  <main>
+    <section id="lienzo"></section>
+
+    <aside id="panel">
+      <!-- ------- Controles ------- -->
+      <div class="card">
+        <h2>Controles</h2>
+        <div class="fila">
+          <button id="btnPlay" class="btn primario">▶ Iniciar</button>
+          <button id="btnReset" class="btn">↺ Reiniciar</button>
+        </div>
+        <label>Algoritmo de ruteo
+          <div class="toggle" id="toggleAlg">
+            <button data-alg="DIJKSTRA" class="on">Dijkstra (metros)</button>
+            <button data-alg="BFS">BFS (tramos)</button>
+          </div>
+        </label>
+        <label>Velocidad <span id="velVal">1.0×</span>
+          <input type="range" id="velocidad" min="0.25" max="3" step="0.25" value="1" />
+        </label>
+        <label>Ocupación por aula <span id="ocupVal">30</span>
+          <input type="range" id="ocupacion" min="5" max="60" step="5" value="30" />
+        </label>
+      </div>
+
+      <!-- ------- Escenarios ------- -->
+      <div class="card">
+        <h2>Escenarios</h2>
+        <div class="fila wrap">
+          <button class="btn esc" data-esc="normal">Normal</button>
+          <button class="btn esc" data-esc="dobleP2">Doble bloqueo piso 2</button>
+          <button class="btn esc" data-esc="aforo">Aforo alto</button>
+        </div>
+        <p class="hint">Haz clic en un <b>tramo</b> (líneas) para bloquear/rehabilitar y ver el reruteo en vivo.</p>
+      </div>
+
+      <!-- ------- Datos reales ------- -->
+      <div class="card">
+        <h2>Datos del pabellón</h2>
+        <button id="btnCargar" class="btn primario">📁 Cargar Excel/CSV de medidas</button>
+        <input type="file" id="inputArchivo" accept=".csv,.xlsx" style="display:none" />
+        <p class="hint">Sube tu Excel (<code>.xlsx</code>) o CSV con las medidas reales
+          (columnas <b>elemento_id</b>, <b>ancho_m</b>, <b>largo_m</b>). El ruteo se recalcula
+          con tus datos, sin cambiar nada más.</p>
+      </div>
+
+      <!-- ------- Panel formal ------- -->
+      <div class="card">
+        <h2>Invariantes de seguridad</h2>
+        <div class="invs" id="invs">
+          <span class="inv" data-k="I1">I1 rutas válidas</span>
+          <span class="inv" data-k="I2">I2 aforo A.130</span>
+          <span class="inv" data-k="I3">I3 sin bloqueados</span>
+          <span class="inv" data-k="I4">I4 cobertura</span>
+          <span class="inv" data-k="I5">I5 fin seguro</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Estado</h2>
+        <div class="stats">
+          <div><b id="stDentro">0</b><span>dentro</span></div>
+          <div><b id="stTransito">0</b><span>en tránsito</span></div>
+          <div><b id="stEvac" class="ok">0</b><span>evacuadas</span></div>
+          <div><b id="stSinRuta" class="bad">0</b><span>sin ruta</span></div>
+        </div>
+        <div class="stats2">
+          <div>⏱ <b id="stTiempo">0.0 s</b></div>
+          <div>📏 <b id="stDist">0 m</b> prom.</div>
+          <div>🧭 <b id="stAlg">Dijkstra</b></div>
+        </div>
+      </div>
+
+      <!-- ------- Leyenda ------- -->
+      <div class="card">
+        <h2>Leyenda</h2>
+        <div class="leyenda">
+          <span><i class="sw pend"></i>Pendiente</span>
+          <span><i class="sw trans"></i>En tránsito</span>
+          <span><i class="sw evac"></i>Evacuada</span>
+          <span><i class="sw sinruta"></i>Sin ruta</span>
+          <span><i class="sw salida"></i>Salida</span>
+          <span><i class="sw bloq"></i>Tramo bloqueado</span>
+        </div>
+        <div class="escala">
+          <span>Congestión:</span>
+          <i class="grad"></i>
+          <span>libre → saturado (A.130)</span>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="js/datos.js"></script>
+  <script src="js/modelo.js"></script>
+  <script src="js/sketch.js"></script>
+</body>
+</html>
